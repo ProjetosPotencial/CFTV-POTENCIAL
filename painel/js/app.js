@@ -35,6 +35,7 @@
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     slack: '<path d="M14.5 10a1.5 1.5 0 0 1 0-3h5a1.5 1.5 0 0 1 0 3zM10 9.5a1.5 1.5 0 0 1-3 0v-5a1.5 1.5 0 0 1 3 0zM9.5 14a1.5 1.5 0 0 1 0 3h-5a1.5 1.5 0 0 1 0-3zM14 14.5a1.5 1.5 0 0 1 3 0v5a1.5 1.5 0 0 1-3 0z"/>',
     chev: '<path d="M9 18l6-6-6-6"/>',
+    theme: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"/>',
   };
   const ic = (n, extra) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra || ""}>${I[n] || ""}</svg>`;
 
@@ -134,7 +135,8 @@
     $("#nav").innerHTML = PAGES.map(([id, label, icon]) => `<a href="#/${id}" class="${route === id ? "active" : ""}">${ic(icon)}<span>${label}</span>${id === "alertas" && nAlert ? `<span class="count">${nAlert}</span>` : ""}</a>`).join("");
     const c = DB.conn();
     $("#sidebarFoot").innerHTML = `<div style="margin-bottom:6px">${c.mode === "demo" ? '<span class="mode-pill demo">● Modo demonstração</span>' : '<span class="mode-pill api">● Conectado à API</span>'}</div>
-      <div>${c.mode === "demo" ? "Dados simulados no navegador. Nada real é alterado." : esc(c.apiBase || "mesma origem")}</div>`;
+      <div>${c.mode === "demo" ? "Dados simulados no navegador. Nada real é alterado." : esc(c.apiBase || "mesma origem")}</div>
+      <button class="btn sm theme-btn" data-act="theme">${ic("theme")} Tema: ${({ light: "claro", dark: "escuro" })[themeGet()] || "do sistema"}</button>`;
     const crit = S && S.alerts.some((a) => a.severity === "critico" && !a.ack);
     $("#sealDot").style.background = crit ? "var(--bad)" : "var(--ok)";
   }
@@ -250,7 +252,7 @@
     const main = opts.center != null ? opts.center : total;
     return `<div class="donut-wrap"><svg viewBox="0 0 140 140" width="150" height="150" role="img" aria-label="${esc(opts.aria || "")}">
       <circle r="${R}" cx="70" cy="70" fill="none" stroke="var(--bg-2)" stroke-width="18"/>${arcs}
-      <text x="70" y="68" text-anchor="middle" fill="var(--text)" font-size="24" font-weight="700">${esc(main)}</text>
+      <text x="70" y="68" text-anchor="middle" fill="var(--text)" font-size="19" font-weight="700">${esc(main)}</text>
       <text x="70" y="88" text-anchor="middle" fill="var(--muted)" font-size="11">${esc(opts.sub || "total")}</text></svg>
       <div class="legend">${segs.map((s) => `<span class="clickable" data-go="${esc(s.go || "")}" style="padding:2px 4px;border-radius:5px"><i style="background:${s.color}"></i>${esc(s.label)}<b>${s.value}</b></span>`).join("")}</div></div>`;
   }
@@ -334,7 +336,7 @@
     const conns = [...new Set(S.devices.map(connOf))].sort();
     const qsBase = { conexao: fConn };
 
-    const kpi = (label, value, foot, color, goto) => `<div class="card kpi click" style="--accent:${color}" data-go="${esc(goto)}"><span class="label">${label}</span><span class="value" style="color:${color === "var(--line-2)" ? "var(--text)" : color}">${value}</span><span class="foot">${foot}</span></div>`;
+    const kpi = (label, value, foot, color, goto) => `<div class="card kpi click" style="--accent:${color}" data-go="${esc(goto)}"><span class="label">${label}</span><span class="value">${value}</span><span class="foot">${foot}</span></div>`;
     const devOn = cnt(devs, "status", "ONLINE"), devOff = cnt(devs, "status", "OFFLINE"), devNv = cnt(devs, "status", "NAO_VERIFICADO");
     const chOn = cnt(chs, "status", "TRANSMITINDO"), chNo = cnt(chs, "status", "SEM_VIDEO");
     const kpis = [
@@ -1019,7 +1021,13 @@
   };
 
   // ================================================================ ações globais
+  function themeGet() { try { return localStorage.getItem("pcftv-theme") || ""; } catch (e) { return ""; } }
+  function themeSet(t) {
+    try { if (t) localStorage.setItem("pcftv-theme", t); else localStorage.removeItem("pcftv-theme"); } catch (e) { /* sem armazenamento */ }
+    if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme");
+  }
   const ACTIONS = {
+    theme() { const order = ["", "light", "dark"]; themeSet(order[(order.indexOf(themeGet()) + 1) % 3]); updateChrome(); },
     newStore: () => storeForm(),
     editStore: (el) => storeForm(Object.assign({}, idx.store[el.dataset.id])),
     async delStore(el) {
