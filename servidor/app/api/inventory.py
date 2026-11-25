@@ -321,7 +321,7 @@ async def sync_channels(device_id: int, body: SyncIn):
                 r = await conn.fetchrow("SELECT id FROM channels WHERE device_id=$1 AND number=$2", device_id, p["channel"])
                 if r:
                     # mantém nome e histórico; só atualiza o caminho do fluxo
-                    await conn.execute("UPDATE channels SET profile_token=$2, rtsp_path=$3, resolution=CASE WHEN resolution='' THEN $4 ELSE resolution END, updated_at=now() WHERE id=$1",
+                    await conn.execute("UPDATE channels SET profile_token=$2, rtsp_path=$3, resolution=CASE WHEN resolution='' THEN $4 ELSE resolution END, last_check=NULL, updated_at=now() WHERE id=$1",
                                        r["id"], p["token"], p.get("rtsp_path") or "", p.get("resolution") or "")
                     kept += 1
                 else:

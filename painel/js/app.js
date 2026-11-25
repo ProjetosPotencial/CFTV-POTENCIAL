@@ -681,14 +681,14 @@
       const have = new Set((idx.chByDev[id] || []).map((c) => c.number));
       $("#ovBody", m.el).innerHTML = `<dl class="kv" style="margin-bottom:14px"><dt>Fabricante</dt><dd>${esc(r.info.manufacturer)}</dd><dt>Modelo</dt><dd>${esc(r.info.model)}</dd><dt>Firmware</dt><dd>${esc(r.info.firmware)}</dd><dt>Serial</dt><dd class="mono">${esc(r.info.serial)}</dd></dl>
         <div class="card table-wrap"><table><thead><tr><th></th><th>Canal</th><th>Perfil</th><th>Vídeo</th><th>URL RTSP (protegida)</th></tr></thead><tbody>
-        ${r.profiles.map((p, i) => `<tr><td><input type="checkbox" data-pi="${i}" ${have.has(p.channel) ? "disabled" : "checked"}></td><td>${p.channel}${have.has(p.channel) ? ' <span class="tag">já cadastrado</span>' : ""}</td><td class="mono">${esc(p.token)}</td><td>${esc(p.encoding)} ${esc(p.resolution)}</td><td class="mono faint">${esc(p.rtsp)}</td></tr>`).join("")}</tbody></table></div>
-        <div class="faint" style="font-size:12px;margin-top:8px">Canais existentes nunca são apagados pela sincronização. Usuário e senha não aparecem nas URLs.</div>`;
+        ${r.profiles.map((p, i) => `<tr><td><input type="checkbox" data-pi="${i}" checked aria-label="Canal ${p.channel}"></td><td>${p.channel}${have.has(p.channel) ? ' <span class="tag" title="O canal existente recebe o perfil e a URL RTSP; nome e histórico são mantidos.">já cadastrado · vincular</span>' : ' <span class="tag">novo</span>'}</td><td class="mono">${esc(p.token)}</td><td>${esc(p.encoding)} ${esc(p.resolution)}</td><td class="mono faint">${esc(p.rtsp)}</td></tr>`).join("")}</tbody></table></div>
+        <div class="faint" style="font-size:12px;margin-top:8px">Canais novos são criados; os já cadastrados recebem o perfil e a URL RTSP descobertos, mantendo nome e histórico. Nada é apagado. Usuário e senha não aparecem nas URLs.</div>`;
       $("#ovFoot", m.el).innerHTML = `<button class="btn" data-close-2>Fechar</button><button class="btn primary" id="ovSync">${ic("sync")} Sincronizar canais selecionados</button>`;
       $("[data-close-2]", m.el).addEventListener("click", m.close);
       $("#ovSync", m.el).addEventListener("click", async (e) => {
         const sel = $$("input[data-pi]:checked", m.el).map((x) => r.profiles[Number(x.dataset.pi)]);
-        if (!sel.length) return toast("Nenhum canal novo selecionado.", "warn");
-        try { const out = await busy(e.currentTarget, () => DB.syncChannels(id, sel)); m.close(); toast(`${out.created} canal(is) criado(s).`, "ok"); await reload(); render(); } catch (err) { toast(esc(err.message), "bad"); }
+        if (!sel.length) return toast("Nenhum canal selecionado.", "warn");
+        try { const out = await busy(e.currentTarget, () => DB.syncChannels(id, sel)); m.close(); toast(`${out.created} canal(is) criado(s) e ${out.kept} vinculado(s) ao perfil ONVIF.`, "ok"); await reload(); render(); } catch (err) { toast(esc(err.message), "bad"); }
       });
     } catch (e) { $("#ovBody", m.el).innerHTML = `<div class="callout bad">${ic("alerta")}<div>${esc(e.message)}</div></div>`; }
   }
