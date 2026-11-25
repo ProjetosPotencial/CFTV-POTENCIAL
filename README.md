@@ -1,4 +1,9 @@
-# Potencial CFTV · Painel
+# Potencial CFTV
+
+- `painel/`: painel web (HTML/CSS/JS, publicado na Vercel).
+- `servidor/`: serviço de monitoramento real (FastAPI + PostgreSQL + FFmpeg/ONVIF) que implementa as rotas abaixo. Veja [servidor/README.md](servidor/README.md).
+
+## Painel
 
 Painel web do monitoramento centralizado de DVRs e câmeras das lojas do Grupo Potencial.
 HTML, CSS e JavaScript puros, sem build e sem dependências. Pronto para publicar na Vercel.
@@ -22,7 +27,7 @@ Já existentes no backend atual:
 
 - `GET /api/stores`, `GET /api/devices`, `GET /api/channels`, `GET /api/events?limit=N`, `GET /api/settings`, `GET /api/summary`
 
-Usadas para cadastro e ações (implementar no backend quando for ligar o painel real):
+Usadas para cadastro e ações (implementadas em `servidor/`):
 
 - `POST/PUT/DELETE /api/stores[/{id}]`
 - `POST/PUT/DELETE /api/devices[/{id}]` · `PUT ...?remove_extra_channels=true` só quando o usuário confirma apagar canais excedentes

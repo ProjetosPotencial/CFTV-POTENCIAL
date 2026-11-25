@@ -1,0 +1,28 @@
+# Sobe SOMENTE o novo container de monitoramento. Não mexe em potencial-cftv nem em potencial-cftv-db
+# e não declara volumes (o banco continua no volume cftv_db_data do compose atual).
+#
+#   cd /home/potencial/cftv-potencial          # clone deste repositório
+#   cp servidor/.env.example servidor/.env      # e preencha
+#   docker compose -f servidor/compose.monitor.yml up -d --build
+services:
+  potencial-cftv-monitor:
+    build:
+      context: ..
+      dockerfile: servidor/Dockerfile
+    image: potencial-cftv-monitor:latest
+    container_name: potencial-cftv-monitor
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8096:8096"
+    networks:
+      - cftv
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+networks:
+  cftv:
+    external: true
+    # rede do compose atual (confira com: docker network ls | grep cftv)
+    name: ${CFTV_NETWORK:-potencial-cftv_default}
