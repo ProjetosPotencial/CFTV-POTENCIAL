@@ -2,7 +2,7 @@
 
 Backend FastAPI que verifica de verdade os DVRs e as câmeras das lojas: rede (TCP), autenticação, ONVIF e vídeo (RTSP com FFmpeg). Grava histórico de disponibilidade, abre e fecha incidentes e avisa no Slack sem repetir a mesma falha.
 
-Ele roda **ao lado** do sistema atual, num container novo (`potencial-cftv-monitor`, porta **8096**), usando o mesmo PostgreSQL num schema separado (`monitor`). O container `potencial-cftv`, o banco e o volume `cftv_db_data` não são alterados. O inventário atual (31 lojas, 31 DVRs, 141 canais) é copiado por uma importação que só insere o que falta.
+Ele roda **ao lado** do sistema atual, num container novo (`potencial-cftv-monitor`, porta **8096**), usando o mesmo PostgreSQL num schema separado (`monitor`). O container `potencial-cftv`, o banco e o volume `cftv_db_data` não são alterados. O inventário (31 lojas, 31 DVRs, 141 canais) vem embutido e é carregado sozinho na primeira subida, com o banco vazio. Não depende do sistema antigo.
 
 ## Como cada coisa é detectada
 
@@ -67,10 +67,8 @@ docker compose -f servidor/compose.monitor.yml up -d --build
 docker logs -f potencial-cftv-monitor      # deve aparecer "migração aplicada" e "monitor iniciado"
 curl http://localhost:8096/api/health
 
-# 5) Importar o inventário atual (primeiro simulação, depois para valer)
-TOKEN=<API_ADMIN_TOKEN>
-curl -X POST -H "Authorization: Bearer $TOKEN" "http://localhost:8096/api/admin/import-legacy?dry_run=true"
-curl -X POST -H "Authorization: Bearer $TOKEN" "http://localhost:8096/api/admin/import-legacy?dry_run=false"
+# 5) Conferir o inventário (carregado sozinho na primeira subida)
+curl -H "Authorization: Bearer <API_ADMIN_TOKEN>" http://localhost:8096/api/summary
 ```
 
 Painel: `http://192.168.0.46:8096` já abre o painel ligado a esta API (informe o token em Configurações › Conexão). O painel da Vercel usa a mesma API quando ela for publicada com HTTPS (ver README da raiz).
@@ -124,7 +122,7 @@ Compatíveis com o painel (`painel/`): `GET /api/summary`, `/api/stores`, `/api/
 - `GET /api/events?store_id=&device_id=&channel_id=&type=A,B&since=&until=&store=&serial=&format=csv`
 - `GET /api/reports/availability?from=2026-11-01&to=2026-11-30[&store_id=][&format=csv]` · por loja e por DVR
 - `GET /api/reports/incidents-timeline?days=30`
-- `GET /api/monitor/status`, `POST /api/onvif/scan`, `POST /api/admin/import-legacy?dry_run=true`
+- `GET /api/monitor/status`, `POST /api/onvif/scan`, `POST /api/admin/import-legacy?dry_run=true` (recarrega o inventário embutido, só acrescenta o que falta; com `LEGACY_API_URL` lê de outro sistema)
 - Documentação interativa: `/api/docs`
 
 ## Desenvolvimento

@@ -1,6 +1,8 @@
-"""Importa o inventário do sistema atual (31 lojas, 31 DVRs, 141 canais) sem alterar nada nele.
+"""Carrega o inventário (31 lojas, 31 DVRs, 141 canais).
 
-Fonte: a API atual (LEGACY_API_URL, padrão http://192.168.0.46:8095), rotas GET /api/stores, /api/devices, /api/channels.
+Fontes, nesta ordem: JSON enviado; API de um sistema antigo (LEGACY_API_URL, opcional); ou o arquivo
+embutido app/data/inventario_inicial.json (padrão, não depende de nenhum outro sistema).
+Na primeira subida, com o banco vazio e SEED_INVENTORY=true, o arquivo embutido é carregado sozinho.
 É idempotente: só insere o que falta (loja por nome, DVR por serial, canal por DVR+número) e nunca sobrescreve
 o que já foi editado aqui. Pode rodar quantas vezes quiser.
 
@@ -15,11 +17,32 @@ import logging
 import sys
 
 import httpx
+from pathlib import Path
 
 from . import db
 from .config import get_config
 
 log = logging.getLogger("cftv.import")
+BUNDLED = Path(__file__).parent / "data" / "inventario_inicial.json"
+
+
+def bundled_inventory() -> dict:
+    return json.loads(BUNDLED.read_text(encoding="utf-8"))
+
+
+async def load_source() -> dict:
+    url = get_config().legacy_api_url
+    return await fetch_legacy(url) if url else bundled_inventory()
+
+
+async def seed_if_empty() -> dict | None:
+    """Primeira subida: banco vazio recebe o inventário embutido. Nunca roda se já houver lojas."""
+    if await db.pool().fetchval("SELECT count(*) FROM stores"):
+        return None
+    stats = await import_data(bundled_inventory())
+    log.info("inventário inicial carregado: %s lojas, %s DVRs, %s canais", stats["stores"]["created"],
+             stats["devices"]["created"], stats["channels"]["created"])
+    return stats
 
 
 async def fetch_legacy(base: str) -> dict:
@@ -71,7 +94,7 @@ async def import_data(data: dict, dry_run: bool = False) -> dict:
                         sid, "Intelbras" if model.upper().startswith(("MHDX", "HDCVI")) else "", model, serial,
                         (d.get("host") or None), int(d.get("port") or 37777), mode, "A confirmar",
                         int(d.get("channels") or 0) if str(d.get("channels") or "").isdigit() else 0, d.get("id"),
-                        "importado do sistema anterior")
+                        "aguardando IP/VPN")
                     stats["devices"]["created"] += 1
                 dev_ids[d.get("id")] = did
                 dev_ids[serial] = did
@@ -95,7 +118,7 @@ async def import_data(data: dict, dry_run: bool = False) -> dict:
             if not dry_run:
                 await conn.execute(
                     "INSERT INTO events(type, description) VALUES('CADASTRO', $1)",
-                    f"Importação do sistema anterior: {stats['stores']['created']} loja(s), {stats['devices']['created']} DVR(s), "
+                    f"Importação do inventário: {stats['stores']['created']} loja(s), {stats['devices']['created']} DVR(s), "
                     f"{stats['channels']['created']} canal(is) novos.")
         except Exception:
             await tr.rollback()
@@ -119,7 +142,7 @@ async def _main() -> int:
             with open(a.file, encoding="utf-8") as f:
                 data = json.load(f)
         else:
-            data = await fetch_legacy(a.url or get_config().legacy_api_url)
+            data = await fetch_legacy(a.url) if a.url else await load_source()
         stats = await import_data(data, a.dry_run)
         print(json.dumps(stats, ensure_ascii=False, indent=2))
     finally:
