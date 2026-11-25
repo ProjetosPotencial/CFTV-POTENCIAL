@@ -40,7 +40,7 @@ Status esperados: DVR `ONLINE | OFFLINE | INSTAVEL | NAO_VERIFICADO | ERRO_AUTEN
 ## Publicar na Vercel
 
 1. Importe este repositório na Vercel (Add New › Project).
-2. Framework: **Other**. Root Directory: **painel**. Sem comando de build.
+2. Pode deixar tudo no padrão: o `vercel.json` da raiz já publica a pasta `painel` (sem build). Se preferir, também funciona com Root Directory = **painel**.
 3. Deploy. Recomendo ativar *Deployment Protection* (senha ou login Vercel), porque o painel mostra o inventário das lojas.
 
 ## Ligar aos dados reais
