@@ -9,4 +9,6 @@ os.environ["API_ADMIN_TOKEN"] = "admin-token-de-teste"
 os.environ["API_READ_TOKEN"] = "read-token-de-teste"
 os.environ["MONITOR_ENABLED"] = "false"
 os.environ["SLACK_WEBHOOK_URL"] = "https://hooks.slack.invalid/teste"
+import tempfile
+os.environ["SNAPSHOT_DIR"] = tempfile.mkdtemp(prefix="cftv-snap-")
 os.environ["PANEL_DIR"] = os.path.join(os.path.dirname(__file__), "..", "..", "painel")

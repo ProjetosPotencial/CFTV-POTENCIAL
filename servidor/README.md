@@ -16,6 +16,7 @@ Ele roda **ao lado** do sistema atual, num container novo (`potencial-cftv-monit
 | A câmera está mandando vídeo? | FFmpeg abre o RTSP (TCP, substream), decodifica 3 quadros reduzidos (160×90, 1 fps) | `TRANSMITINDO` |
 | Câmera sem sinal? | Conectou mas nenhum quadro chegou, ou a imagem é uniforme (tela preta/azul de "sem vídeo"), ou o canal não existe (404) | `SEM_VIDEO` |
 | Imagem congelada? | Quadros idênticos byte a byte na amostra, ou idênticos à verificação anterior | `SEM_VIDEO` (detalhe "congelada") |
+| Como está a imagem? | No mesmo teste, o FFmpeg grava uma 2ª saída: uma foto JPEG do canal (até 640 px de largura). Sem conexão extra com o DVR | foto nos quadradinhos do painel |
 | DVR caiu? | Os canais viram `OFFLINE` com detalhe "DVR offline" e **não** geram alerta de canal; o alerta é do DVR | diferencia câmera sem vídeo de DVR fora |
 
 Antes de mudar um canal para falha, o monitor testa de novo após 5 s (reconexão). Responder TCP nunca é tratado como "tem vídeo".
@@ -106,17 +107,41 @@ O container usa a rede bridge do Docker e sai pelas rotas do host, então rotas 
 | `timeout_s` / `retries` / `concurrency` | 5 / 3 / 10 | 1–60 / 1–10 / 1–100 |
 | `rtsp_interval` (s entre testes de vídeo por canal) | 300 | 60–86400 |
 | `rtsp_timeout_s` / `rtsp_concurrency` | 10 / 4 | 3–60 / 1–16 |
-| `rtsp_substream`, `freeze_detection` | sim, sim | |
+| `rtsp_substream`, `freeze_detection`, `snapshots` (foto de cada canal) | sim, sim, sim | |
 | `offline_alert_minutes` / `slack_repeat_minutes` | 30 / 60 | 5–1440 |
 | `unstable_changes` em `unstable_window_minutes` | 3 em 30 min | |
 | `retention_days` (amostras de disponibilidade) | 180 | 7–3650 (eventos e incidentes não são apagados) |
 | `slack_notify` | todos ligados | por tipo de evento |
+
+## Fotos dos canais
+
+A cada teste de vídeo (padrão: a cada 5 min por canal, `rtsp_interval`) o monitor guarda uma foto de cada câmera em `SNAPSHOT_DIR` (padrão `/app/data/snapshots`, um arquivo por canal, sobrescrito; ~30 KB cada). A foto anterior só é trocada quando chega uma imagem nova, então um canal que caiu continua mostrando a última imagem recebida, em cinza, com a idade da foto. O botão "Testar transmissão" também atualiza a foto na hora.
+
+Para ver as fotos no painel da Vercel, a API precisa estar publicada com HTTPS (ver "Publicar a API com HTTPS" abaixo). As fotos só existem para DVRs que o servidor alcança por IP: os que estão só em P2P/Relay continuam sem foto até haver VPN.
+
+## Publicar a API com HTTPS (Cloudflare Tunnel)
+
+O painel da Vercel é HTTPS e roda no navegador, fora da rede da empresa, então precisa de uma URL HTTPS pública para a porta 8096. O jeito mais simples, sem abrir porta no roteador:
+
+```bash
+# no servidor 192.168.0.46, com um domínio já na Cloudflare
+docker run -d --name cftv-tunnel --restart unless-stopped --network host \
+  cloudflare/cloudflared:latest tunnel --no-autoupdate run --token <TOKEN_DO_TUNNEL>
+```
+
+No painel da Cloudflare (Zero Trust › Networks › Tunnels) crie o túnel, copie o token e adicione um *Public hostname*, por exemplo `cftv-api.seudominio.com.br` → `http://localhost:8096`. Depois:
+
+1. No `.env` do monitor, `CORS_ORIGINS=https://cftv-potencial.vercel.app` (já é o padrão) e tokens fortes em `API_READ_TOKEN`/`API_ADMIN_TOKEN`. Reinicie o container.
+2. No painel da Vercel, Configurações › Conexão: modo API, URL `https://cftv-api.seudominio.com.br` e o token.
+
+As fotos usam o mesmo token das outras rotas; sem token a API responde 401.
 
 ## Rotas
 
 Compatíveis com o painel (`painel/`): `GET /api/summary`, `/api/stores`, `/api/devices`, `/api/channels`, `/api/events`, `/api/settings`, e as de cadastro/ação listadas no README da raiz. Novas:
 
 - `GET /api/health` (sem token)
+- `GET /api/channels/{id}/snapshot` · última foto do canal (JPEG, mesmo token de leitura). `GET /api/channels` traz `snapshot_at` (data da foto) para o painel só baixar de novo quando muda
 - `GET /api/devices/{id}/availability?days=7` · disponibilidade por dia e incidentes do DVR
 - `GET /api/incidents?open_only=true` · alertas ativos
 - `GET /api/events?store_id=&device_id=&channel_id=&type=A,B&since=&until=&store=&serial=&format=csv`

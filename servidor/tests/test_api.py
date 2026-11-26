@@ -145,6 +145,13 @@ async def test_monitoramento_completo(api, monkeypatch):
     assert chs[3]["status"] == "SEM_VIDEO" and "congelada" in chs[3]["status_detail"]
     assert len([m for m in api.slack if "Canal perdeu vídeo" in m]) == 2
 
+    # foto de cada canal, capturada no mesmo teste e protegida por token
+    assert chs[1]["snapshot_at"]
+    foto = await api.get(f"/api/channels/{chs[1]['id']}/snapshot", headers=READ)
+    assert foto.status_code == 200 and foto.headers["content-type"] == "image/jpeg" and foto.content[:2] == b"\xff\xd8"
+    assert (await api.get(f"/api/channels/{chs[1]['id']}/snapshot")).status_code == 401
+    assert (await api.get("/api/channels/999999/snapshot", headers=READ)).status_code == 404
+
     # mesma falha não gera novo alerta
     n = len(api.slack)
     await api.post(f"/api/channels/{chs[2]['id']}/test", headers=ADMIN)

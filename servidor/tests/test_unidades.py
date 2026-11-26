@@ -95,6 +95,17 @@ async def test_ffmpeg_congelado(lavfi):
     assert r.status == "SEM_VIDEO" and "congelada" in r.detail
 
 
+async def test_ffmpeg_grava_foto_na_mesma_conexao(lavfi, tmp_path):
+    foto = tmp_path / "1.tmp.jpg"
+    r = await rtsp_probe.probe("vivo", 10, snapshot_path=str(foto))
+    assert r.status == "TRANSMITINDO", r.detail
+    data = foto.read_bytes()
+    assert data[:2] == b"\xff\xd8" and len(data) > 1000   # JPEG
+    sem = await rtsp_probe.probe("vivo", 10)
+    assert sem.status == "TRANSMITINDO"
+    assert "image2" not in rtsp_probe.build_args("vivo", 5)
+
+
 async def test_ffmpeg_rtsp_sem_servidor():
     r = await rtsp_probe.probe("rtsp://127.0.0.1:9/cam", 3)
     assert r.status == "OFFLINE"

@@ -1,6 +1,8 @@
 """Conversão de linhas do banco para JSON público (sem segredos)."""
 from __future__ import annotations
 
+from ..monitor import snapshots
+
 
 def device_out(d: dict) -> dict:
     out = {k: v for k, v in d.items() if k not in ("password_enc", "onvif", "fail_count", "legacy_id")}
@@ -19,6 +21,7 @@ def device_out(d: dict) -> dict:
 
 def channel_out(c: dict) -> dict:
     out = {k: v for k, v in c.items() if k not in ("frame_hash", "legacy_id")}
+    out["snapshot_at"] = snapshots.taken_at(c["id"]) if c.get("id") else None
     return out
 
 

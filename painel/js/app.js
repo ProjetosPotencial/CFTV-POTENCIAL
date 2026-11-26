@@ -56,6 +56,10 @@
     if (s < 86400) return `há ${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
     return `há ${Math.floor(s / 86400)} d`;
   }
+  function shortAgo(iso) {
+    const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+    return s < 60 ? "agora" : s < 3600 ? Math.round(s / 60) + " min" : s < 86400 ? Math.floor(s / 3600) + " h" : Math.floor(s / 86400) + " d";
+  }
   const since = (iso) => (iso ? DB.fmtDur(Math.round((Date.now() - Date.parse(iso)) / 1000)) : "—");
   const pct = (v) => (v == null || isNaN(v) ? "—" : (v * 100).toFixed(v >= 0.9995 ? 1 : 2).replace(".", ",") + "%");
   const num = (v) => Number(v || 0).toLocaleString("pt-BR");
@@ -175,6 +179,7 @@
     $("#pageSub").textContent = out.sub || "";
     document.title = out.title + " · Potencial CFTV";
     $("#content").innerHTML = out.html;
+    hydrateSnaps($("#content"));
     if (out.after) out.after();
     updateChrome();
     document.body.classList.remove("nav-open");
@@ -495,14 +500,64 @@
       ${evs.map((e) => `<tr><td class="mono muted" style="white-space:nowrap">${fmtDate(e.ts)}</td>${compact ? "" : `<td>${esc(storeName(e.store_id))}</td>`}<td>${evBadge(e.type)}</td><td>${e.channel_id && idx.ch[e.channel_id] ? `<span class="tag">Canal ${idx.ch[e.channel_id].number}</span> ` : ""}${esc(e.description)}</td><td class="num">${e.open ? '<span class="badge s-bad plain">em aberto · ' + since(e.ts) + "</span>" : DB.fmtDur(e.duration_s)}</td></tr>`).join("")}</tbody></table></div>`;
   }
 
+  // ================================================================ fotos dos canais
+  // Cache em memória: id do canal -> { at, url } (URL de blob). A foto só é baixada de novo quando snapshot_at muda.
+  const SNAP = new Map();
+  const snapQueue = [];
+  let snapActive = 0;
+  function snapImg(c, cls) {
+    if (!c.snapshot_at) return "";
+    const hit = SNAP.get(c.id);
+    const fresh = hit && hit.at === c.snapshot_at;
+    return `<img class="${cls}" alt="Foto do canal ${c.number}" ${hit ? `src="${hit.url}"` : ""} ${fresh ? "" : `data-snap="${c.id}" data-at="${esc(c.snapshot_at)}"`}>`;
+  }
+  function pumpSnaps() {
+    while (snapActive < 6 && snapQueue.length) {
+      const img = snapQueue.shift();
+      const id = Number(img.dataset.snap), at = img.dataset.at;
+      const hit = SNAP.get(id);
+      if (hit && hit.at === at) { showSnap(img, hit.url); continue; }
+      snapActive++;
+      DB.snapshotBlob(id).then((blob) => {
+        if (!blob) return;
+        const old = SNAP.get(id);
+        if (old && old.at === at) { showSnap(img, old.url); return; }
+        const url = URL.createObjectURL(blob);
+        SNAP.set(id, { at, url });
+        $$(`img[data-snap="${id}"]`).forEach((el) => showSnap(el, url));
+        showSnap(img, url);
+        if (old) setTimeout(() => URL.revokeObjectURL(old.url), 5000);
+      }).finally(() => { snapActive--; pumpSnaps(); });
+    }
+  }
+  function showSnap(img, url) {
+    img.src = url;
+    delete img.dataset.snap;
+    const cam = img.closest(".cam");
+    if (cam) cam.classList.add("has-snap");
+    const big = img.closest(".snap-big");
+    if (big) big.classList.add("loaded");
+  }
+  const snapObserver = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+    entries.forEach((en) => { if (en.isIntersecting) { snapObserver.unobserve(en.target); snapQueue.push(en.target); } });
+    pumpSnaps();
+  }, { rootMargin: "300px" }) : null;
+  function hydrateSnaps(root) {
+    if (DB.mode !== "api") return;
+    $$("img[data-snap]", root).forEach((img) => { if (snapObserver) snapObserver.observe(img); else snapQueue.push(img); });
+    if (!snapObserver) pumpSnaps();
+  }
+
   // ================================================================ câmeras (quadradinhos)
   function camTile(c, d) {
     const st = DB.CH_STATUS[c.status] || DB.CH_STATUS.NAO_VERIFICADO;
     const cls = c.status === "OFFLINE" ? "off" : c.status === "SEM_VIDEO" ? "novideo" : "";
     const detail = c.status === "TRANSMITINDO" ? (c.fps ? c.fps + " fps · " : "") + (c.resolution || "") : c.status === "NAO_VERIFICADO" ? "aguardando teste" : "há " + since(c.status_since || c.last_frame);
-    return `<div class="cam ${cls}" style="--c:${st.color}" data-ch="${c.id}" title="${esc((d ? storeName(d.store_id) + " · " : "") + "Canal " + c.number + " · " + c.name)}">
+    const hasSnap = c.snapshot_at && SNAP.has(c.id);
+    return `<div class="cam ${cls} ${hasSnap ? "has-snap" : ""}" style="--c:${st.color}" data-ch="${c.id}" title="${esc((d ? storeName(d.store_id) + " · " : "") + "Canal " + c.number + " · " + c.name + (c.snapshot_at ? " · foto " + fmtAgo(c.snapshot_at) : ""))}">
+      ${snapImg(c, "cam-img")}
       <div class="cam-ico">${ic("canal")}</div>
-      <div class="cam-top"><span class="cam-n">CH ${pad(c.number)}</span><span class="cam-led ${c.status === "TRANSMITINDO" ? "live" : ""}"></span></div>
+      <div class="cam-top"><span class="cam-n">CH ${pad(c.number)}</span>${c.snapshot_at ? `<span class="cam-age">${esc(shortAgo(c.snapshot_at))}</span>` : ""}<span class="cam-led ${c.status === "TRANSMITINDO" ? "live" : ""}"></span></div>
       <div class="cam-bot"><div class="cam-name">${esc(c.name)}</div><div class="cam-st">${st.label}</div><div class="faint" style="font-size:10.5px">${esc(detail)}</div></div></div>`;
   }
   function camGrid(chs, d) {
@@ -749,7 +804,10 @@
     const down = downtime(evs.filter((e) => e.type === "CANAL_SEM_VIDEO"), from, to) + downtime(S.events.filter((e) => e.device_id === d.id && !e.channel_id && DOWN_DEV.includes(e.type)), from, to);
     const m = openModal(`${modalHead(`Canal ${c.number} · ${esc(c.name)}`, esc(storeName(d.store_id)) + " · DVR " + esc(d.serial))}
       <div class="modal-b" style="display:flex;flex-direction:column;gap:16px">
-        <div style="max-width:360px">${camTile(c, d).replace('data-ch="' + c.id + '"', "")}</div>
+        ${c.snapshot_at ? `<figure class="snap-big ${SNAP.has(c.id) ? "loaded" : ""}" data-act="snapZoom" data-id="${c.id}" title="Ver em tamanho maior">${snapImg(c, "snap-img")}<span class="snap-wait">Carregando foto…</span>
+          <figcaption>${c.status === "TRANSMITINDO" ? "" : "<b>Última imagem recebida</b> · "}Foto de ${fmtDate(c.snapshot_at)} (${fmtAgo(c.snapshot_at)})</figcaption></figure>`
+          : `<div style="max-width:360px">${camTile(c, d).replace('data-ch="' + c.id + '"', "")}</div>
+        ${DB.mode === "api" ? `<div class="callout">${ic("info")}<div>Este canal ainda não tem foto. Ela aparece depois do primeiro teste de vídeo com sucesso (o DVR precisa estar acessível pelo servidor).</div></div>` : ""}`}
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm primary" data-act="testCh" data-id="${id}">${ic("play")} Testar transmissão</button><button class="btn sm" data-act="editCh" data-id="${id}">${ic("edit")} Editar</button><button class="btn sm" data-dev="${d.id}">${ic("dvr")} Ver DVR</button><button class="btn sm danger" data-act="delCh" data-id="${id}">${ic("trash")} Excluir</button></div>
         <div id="chLog"></div>
         <dl class="kv">
@@ -764,7 +822,16 @@
         </dl>
         <div><h4 style="margin-bottom:8px;font-size:13px">Histórico de indisponibilidade</h4>${evTable(evs.slice(0, 40), true)}</div>
       </div>`, { drawer: true });
+    hydrateSnaps(m.el);
     return m;
+  }
+  function snapZoom(id) {
+    const c = idx.ch[id], hit = SNAP.get(id);
+    if (!c || !hit) return;
+    const d = idx.dev[c.device_id] || {};
+    openModal(`${modalHead(`Canal ${c.number} · ${esc(c.name)}`, esc(storeName(d.store_id)) + " · foto de " + fmtDate(c.snapshot_at))}
+      <div class="modal-b"><img class="snap-full" src="${hit.url}" alt="Foto do canal ${c.number}"></div>
+      <div class="modal-f"><a class="btn" href="${hit.url}" download="canal-${c.id}.jpg">${ic("download")} Baixar</a><button class="btn primary" data-close>Fechar</button></div>`, { size: "lg" });
   }
   async function testChannel(id, btn) {
     const box = $("#chLog");
@@ -958,6 +1025,7 @@
         <div class="field"><label>Timeout de quadro (segundos)</label><input class="input" type="number" name="rtsp_timeout_s" min="3" max="60" value="${s.rtsp_timeout_s}"></div>
         <div class="field"><label>Fluxos RTSP simultâneos</label><input class="input" type="number" name="rtsp_concurrency" min="1" max="16" value="${s.rtsp_concurrency}"><span class="hint">Mantenha baixo para não sobrecarregar o link das lojas.</span></div>
         <div class="field" style="justify-content:flex-end"><label class="check"><input type="checkbox" name="freeze_detection" ${s.freeze_detection ? "checked" : ""}> Detectar imagem congelada (compara quadros)</label></div>
+        <div class="field" style="justify-content:flex-end"><label class="check"><input type="checkbox" name="snapshots" ${s.snapshots !== false ? "checked" : ""}> Guardar foto de cada canal (aparece nos quadradinhos)</label><span class="hint">A foto sai do próprio teste de vídeo, sem abrir conexão extra com o DVR.</span></div>
         <div class="section-t">Alertas</div>
         <div class="field"><label>Minutos offline para alerta prolongado</label><input class="input" type="number" name="offline_alert_minutes" min="5" max="1440" value="${s.offline_alert_minutes}"></div>
         <div class="field"><label>Repetir aviso da mesma falha após (min)</label><input class="input" type="number" name="slack_repeat_minutes" min="5" max="1440" value="${s.slack_repeat_minutes}"></div>
@@ -993,6 +1061,7 @@
           const out = {};
           Object.entries(f).forEach(([k, v]) => (out[k] = Number(v)));
           out.freeze_detection = !!f.freeze_detection;
+          out.snapshots = !!f.snapshots;
           if (out.poll_interval < 15 || out.poll_interval > 3600) return toast("O intervalo permitido é de 15 a 3.600 segundos.", "bad");
           for (const el of $$("input[type=number]", fs)) if (!el.checkValidity()) return toast("Valor fora do limite: " + esc(el.closest(".field").querySelector("label").textContent), "bad");
           try { await busy(e.submitter, () => DB.saveSettings(out)); toast("Configurações salvas.", "ok"); await reload(); render(); } catch (err) { toast(esc(err.message), "bad"); }
@@ -1027,6 +1096,7 @@
     if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme");
   }
   const ACTIONS = {
+    snapZoom: (el) => snapZoom(Number(el.dataset.id)),
     theme() { const order = ["", "light", "dark"]; themeSet(order[(order.indexOf(themeGet()) + 1) % 3]); updateChrome(); },
     newStore: () => storeForm(),
     editStore: (el) => storeForm(Object.assign({}, idx.store[el.dataset.id])),

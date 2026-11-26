@@ -33,6 +33,8 @@ class Config:
     legacy_api_url: str = field(default_factory=lambda: os.getenv("LEGACY_API_URL", ""))
     seed_inventory: bool = field(default_factory=lambda: _bool("SEED_INVENTORY", True))
     ffmpeg_bin: str = field(default_factory=lambda: os.getenv("FFMPEG_BIN", "ffmpeg"))
+    # Fotos dos canais (uma por canal, sobrescrita a cada teste de vídeo).
+    snapshot_dir: str = field(default_factory=lambda: os.getenv("SNAPSHOT_DIR", "/app/data/snapshots"))
     panel_dir: str = field(default_factory=lambda: os.getenv("PANEL_DIR", "/app/painel"))
     display_tz: str = field(default_factory=lambda: os.getenv("DISPLAY_TZ", "America/Sao_Paulo"))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))

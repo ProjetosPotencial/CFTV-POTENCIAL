@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 
 from .. import db
 from ..monitor import onvif as onvif_mod
 from ..monitor.engine import DEVICE_SQL, monitor
-from ..monitor import state
+from ..monitor import snapshots, state
 from ..monitor.urls import public_url
 from ..schemas import ChannelIn, DeviceIn, StoreIn, SyncIn
 from ..security import CredentialError, decrypt_secret, encrypt_secret, mask_text, require_admin, require_read
@@ -414,7 +416,18 @@ async def delete_channel(channel_id: int):
             await conn.execute("UPDATE incidents SET ended_at=now() WHERE channel_id=$1 AND ended_at IS NULL", channel_id)
             await conn.execute("DELETE FROM channels WHERE id=$1", channel_id)
             await _audit(conn, dev, f"Canal {ch['number']} ({ch['name']}) excluído. O histórico foi mantido.", ch=ch)
+    snapshots.delete(channel_id)
     return Response(status_code=204)
+
+
+@router.get("/channels/{channel_id}/snapshot", dependencies=[Depends(require_read)],
+            responses={200: {"content": {"image/jpeg": {}}}, 404: {"description": "Canal ainda sem foto"}})
+async def channel_snapshot(channel_id: int):
+    """Última foto do canal (JPEG), capturada no teste de vídeo. Exige o mesmo token de leitura da API."""
+    path = snapshots.path_for(channel_id)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "Este canal ainda não tem foto: ela aparece depois do primeiro teste de vídeo com sucesso.")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=30"})
 
 
 @router.post("/channels/{channel_id}/test", dependencies=[Depends(require_admin)])

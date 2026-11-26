@@ -15,7 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY servidor/app ./app
 COPY painel ./painel
 
-RUN useradd --system --uid 10001 cftv && chown -R cftv /app
+RUN mkdir -p /app/data/snapshots \
+ && useradd --system --uid 10001 cftv && chown -R cftv /app
 USER cftv
 
 EXPOSE 8096

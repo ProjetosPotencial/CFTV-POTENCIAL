@@ -22,6 +22,7 @@ class MonitorSettings(BaseModel):
     rtsp_concurrency: int = Field(4, ge=1, le=16)           # fluxos RTSP simultâneos (global)
     rtsp_substream: bool = True                             # usa substream (mais leve) quando o modelo permite
     freeze_detection: bool = True
+    snapshots: bool = True                                  # guarda uma foto de cada canal a cada teste de vídeo
     offline_alert_minutes: int = Field(30, ge=5, le=1440)   # alerta "sem comunicação prolongada"
     slack_repeat_minutes: int = Field(60, ge=5, le=1440)    # lembrete da mesma falha aberta
     unstable_changes: int = Field(3, ge=2, le=20)           # trocas de status na janela => INSTÁVEL

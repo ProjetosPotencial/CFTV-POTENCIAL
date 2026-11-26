@@ -5,6 +5,7 @@ Abre o fluxo RTSP (TCP), decodifica poucos quadros reduzidos (160x90, tons de ci
   SEM_VIDEO           conectou mas não veio quadro, ou imagem uniforme (tela de "sem sinal"), ou congelada
   OFFLINE             RTSP sem rota/sem resposta
   ERRO_AUTENTICACAO   401/403
+Na mesma conexão, opcionalmente grava uma foto JPEG do canal (snapshot_path), sem abrir um segundo fluxo.
 A URL com credenciais só existe em memória e nunca é logada (ver security.mask_text).
 """
 from __future__ import annotations
@@ -20,6 +21,8 @@ from ..security import mask_url
 W, H = 160, 90
 FRAME = W * H
 UNIFORM_STDDEV = 3.0
+SNAPSHOT_WIDTH = 640     # largura da foto do canal (a altura segue a proporção)
+SNAPSHOT_QUALITY = 6     # qscale do MJPEG: 2 = melhor, 31 = pior
 
 
 @dataclass
@@ -97,15 +100,21 @@ def input_args(url: str, timeout_s: float) -> list[str]:
             "-analyzeduration", "2000000", "-probesize", "1000000", "-i", url]
 
 
-def build_args(url: str, timeout_s: float, ffmpeg: str = "ffmpeg", frames: int = 3) -> list[str]:
-    return [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "info", *input_args(url, timeout_s),
+def build_args(url: str, timeout_s: float, ffmpeg: str = "ffmpeg", frames: int = 3,
+               snapshot_path: str | None = None) -> list[str]:
+    args = [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "info", "-y", *input_args(url, timeout_s),
             "-an", "-sn", "-dn", "-vf", f"fps=1,scale={W}:{H}:flags=area,format=gray",
             "-frames:v", str(frames), "-f", "rawvideo", "pipe:1"]
+    if snapshot_path:
+        # 2ª saída do mesmo fluxo: o último quadro amostrado vira a foto do canal.
+        args += ["-an", "-sn", "-dn", "-vf", f"fps=1,scale='min({SNAPSHOT_WIDTH},iw)':-2,format=yuvj420p",
+                 "-frames:v", str(frames), "-q:v", str(SNAPSHOT_QUALITY), "-f", "image2", "-update", "1", snapshot_path]
+    return args
 
 
 async def probe(url: str, timeout_s: float, freeze_detection: bool = True, previous_hash: str = "",
-                ffmpeg: str = "ffmpeg", frames: int = 3) -> ProbeResult:
-    args = build_args(url, timeout_s, ffmpeg, frames)
+                ffmpeg: str = "ffmpeg", frames: int = 3, snapshot_path: str | None = None) -> ProbeResult:
+    args = build_args(url, timeout_s, ffmpeg, frames, snapshot_path)
     try:
         proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     except FileNotFoundError:

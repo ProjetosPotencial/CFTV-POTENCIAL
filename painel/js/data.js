@@ -242,6 +242,7 @@
       id: c.id, device_id: c.device_id, number: c.number, name: c.name || "Canal " + c.number,
       status: (c.status || "NAO_VERIFICADO").toUpperCase(), resolution: c.resolution || "", fps: c.fps ?? null,
       last_check: c.last_check || null, last_frame: c.last_frame || null, status_since: c.status_since || null,
+      snapshot_at: c.snapshot_at || null,
     }));
     const devBySerial = Object.fromEntries(devices.map((d) => [d.serial, d]));
     const events = (raw.events || []).map((e, i) => {
@@ -258,7 +259,7 @@
   }
   function demoDefaults() { return { settings: seedDemoSettings() }; }
   function seedDemoSettings() {
-    return { poll_interval: 60, timeout_s: 5, retries: 3, concurrency: 10, rtsp_interval: 300, rtsp_concurrency: 4, rtsp_timeout_s: 10, freeze_detection: true, offline_alert_minutes: 30, slack_configured: false, slack_notify: {}, slack_repeat_minutes: 60 };
+    return { poll_interval: 60, timeout_s: 5, retries: 3, concurrency: 10, rtsp_interval: 300, rtsp_concurrency: 4, rtsp_timeout_s: 10, freeze_detection: true, snapshots: true, offline_alert_minutes: 30, slack_configured: false, slack_notify: {}, slack_repeat_minutes: 60 };
   }
 
   // ---------- alertas (derivados do estado atual) ----------
@@ -517,6 +518,18 @@
     async deleteChannel(id) {
       if (conn().mode === "api") return http("DELETE", "/api/channels/" + id);
       const st = demoState(); st.channels = st.channels.filter((c) => c.id !== id); demoSave();
+    },
+    // Foto do canal (JPEG). Vai com o token no cabeçalho, por isso não dá para usar a URL direto no <img>.
+    async snapshotBlob(id) {
+      const c = conn();
+      if (c.mode !== "api") return null;
+      const headers = {};
+      if (c.apiToken) headers.Authorization = "Bearer " + c.apiToken;
+      try {
+        const res = await fetch(c.apiBase + "/api/channels/" + id + "/snapshot", { headers });
+        if (!res.ok) return null;
+        return await res.blob();
+      } catch (e) { return null; }
     },
     async testChannel(id) {
       if (conn().mode === "api") return http("POST", "/api/channels/" + id + "/test");

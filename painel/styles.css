@@ -380,6 +380,22 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   transition: transform var(--d-base) var(--ease-standard), box-shadow var(--d-base);
 }
 .cam:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+/* foto real do canal */
+.cam .cam-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.cam .cam-img:not([src]) { opacity: 0; }
+.cam.has-snap::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgb(0 0 0 / .5) 0%, transparent 30%, transparent 50%, rgb(0 0 0 / .78) 100%); }
+.cam.has-snap .cam-ico { display: none; }
+.cam.has-snap.off .cam-img, .cam.has-snap.novideo .cam-img { filter: grayscale(1) brightness(.55); }
+.cam .cam-top .cam-age { margin-left: auto; font-family: var(--font-num); font-size: 10.5px; font-weight: 700; background: rgb(0 0 0 / .5); padding: 1px 6px; border-radius: 6px; color: #F3EBDD; }
+.snap-big { position: relative; margin: 0; border-radius: var(--radius-lg); overflow: hidden; background: #0B0805; aspect-ratio: 16 / 9; cursor: zoom-in; border: 1px solid var(--line-2); }
+.snap-big .snap-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.snap-big .snap-img:not([src]) { opacity: 0; }
+.snap-big .snap-wait { position: absolute; inset: 0; display: grid; place-items: center; color: #A69B88; font-size: 13px; }
+.snap-big.loaded .snap-wait { display: none; }
+.snap-big figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 12px 8px; font-size: 12px; color: #F3EBDD; background: linear-gradient(180deg, transparent, rgb(0 0 0 / .75)); }
+.modal.lg { width: min(1100px, 100%); }
+.snap-full { display: block; width: 100%; height: auto; max-height: 75vh; object-fit: contain; border-radius: var(--radius-md); background: #000; }
 .cam .cam-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; position: relative; z-index: 1; }
 .cam .cam-n { font-family: var(--font-num); font-size: 11.5px; font-weight: 700; background: rgb(0 0 0 / .5); padding: 1px 7px; border-radius: 6px; }
 .cam .cam-led { width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--idle)); box-shadow: 0 0 10px var(--c, transparent); }

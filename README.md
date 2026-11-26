@@ -36,6 +36,7 @@ Usadas para cadastro e ações (implementadas em `servidor/`):
 - `POST /api/devices/{id}/onvif/discover` → `{ supported, reason?, info, profiles: [{ token, channel, encoding, resolution, rtsp }] }` (RTSP sem usuário/senha)
 - `POST /api/devices/{id}/channels/sync` com `{ profiles: [token] }` → `{ created, kept }`
 - `POST /api/channels/{id}/test` → `{ ok, status, steps }`
+- `GET /api/channels/{id}/snapshot` → foto JPEG do canal (o painel busca com o token e mostra nos quadradinhos quando `snapshot_at` vem em `/api/channels`)
 - `PUT /api/settings`, `POST /api/slack/test`, `POST /api/monitor/run`
 
 Campos opcionais que o painel aproveita se o backend enviar: `store_id`, `manufacturer`, `rtsp_port`, `onvif_port`, `protocol`, `username`, `has_password`, `status_since`, `last_seen`, `latency_ms`, `last_frame`, `resolution`, `fps`, e nos eventos `type`, `duration_s`, `recovered_at`, `open`.

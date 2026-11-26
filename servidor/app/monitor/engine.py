@@ -17,7 +17,7 @@ from .. import db
 from ..config import get_config
 from ..security import CredentialError, decrypt_secret, mask_text
 from ..settings_store import MonitorSettings, load as load_settings
-from . import alerts, onvif, rtsp_describe, rtsp_probe, state, tcp, urls
+from . import alerts, onvif, rtsp_describe, rtsp_probe, snapshots, state, tcp, urls
 
 log = logging.getLogger("cftv.monitor")
 
@@ -288,11 +288,16 @@ class Monitor:
         shown = urls.public_url(d, c, s.rtsp_substream)
         steps.append({"ok": None, "text": f"ffprobe/ffmpeg RTSP (TCP) {shown}"})
         cfg = get_config()
-        r = await rtsp_probe.probe(url, s.rtsp_timeout_s, s.freeze_detection, c.get("frame_hash") or "", cfg.ffmpeg_bin)
+        snap = snapshots.tmp_path_for(c["id"]) if s.snapshots and c.get("id") else None
+        r = await rtsp_probe.probe(url, s.rtsp_timeout_s, s.freeze_detection, c.get("frame_hash") or "", cfg.ffmpeg_bin,
+                                   snapshot_path=snap)
         if r.status in ("SEM_VIDEO", "OFFLINE") and r.status != "ERRO_AUTENTICACAO":
             steps.append({"ok": False, "text": mask_text(r.detail, pw) + " · nova tentativa em 5 s"})
             await asyncio.sleep(CHANNEL_RETRY_DELAY_S)
-            r = await rtsp_probe.probe(url, s.rtsp_timeout_s, s.freeze_detection, c.get("frame_hash") or "", cfg.ffmpeg_bin)
+            r = await rtsp_probe.probe(url, s.rtsp_timeout_s, s.freeze_detection, c.get("frame_hash") or "", cfg.ffmpeg_bin,
+                                       snapshot_path=snap)
+        if snap and snapshots.commit(c["id"]):
+            steps.append({"ok": True, "text": "Foto do canal atualizada"})
         detail = mask_text(r.detail, pw, d["username"] if len(d["username"]) > 3 else None)
         if r.codec or r.resolution:
             steps.append({"ok": True, "text": f"Stream {r.codec} {r.resolution}" + (f" @ {r.fps:g} fps" if r.fps else "")})
