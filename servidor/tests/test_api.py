@@ -247,3 +247,12 @@ async def test_painel_servido_em_modo_api(api):
     assert 'mode: "api"' in r.text
     r = await api.get("/")
     assert r.status_code == 200 and "Potencial" in r.text
+
+
+async def test_inventario_embutido_sem_sistema_antigo(api):
+    from app.legacy_import import seed_if_empty
+    st = await seed_if_empty()
+    assert (st["stores"]["created"], st["devices"]["created"], st["channels"]["created"]) == (31, 31, 141)
+    assert await seed_if_empty() is None                     # não recarrega com dados existentes
+    r = (await api.post("/api/admin/import-legacy?dry_run=false", headers=ADMIN)).json()   # sem corpo, sem LEGACY_API_URL
+    assert r["devices"]["found"] == 31 and r["devices"]["created"] == 0

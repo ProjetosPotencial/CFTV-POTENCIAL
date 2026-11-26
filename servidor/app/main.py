@@ -47,6 +47,9 @@ async def lifespan(app: FastAPI):
     if not cfg.admin_token:
         log.warning("API_ADMIN_TOKEN não definido: rotas de alteração ficam bloqueadas.")
     await db.connect()
+    if cfg.seed_inventory:
+        from .legacy_import import seed_if_empty
+        await seed_if_empty()
     if cfg.monitor_enabled:
         monitor.start()
     yield
