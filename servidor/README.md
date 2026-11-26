@@ -131,8 +131,9 @@ docker run -d --name cftv-tunnel --restart unless-stopped --network host \
 
 No painel da Cloudflare (Zero Trust › Networks › Tunnels) crie o túnel, copie o token e adicione um *Public hostname*, por exemplo `cftv-api.seudominio.com.br` → `http://localhost:8096`. Depois:
 
-1. No `.env` do monitor, `CORS_ORIGINS=https://cftv-potencial.vercel.app` (já é o padrão) e tokens fortes em `API_READ_TOKEN`/`API_ADMIN_TOKEN`. Reinicie o container.
-2. No painel da Vercel, Configurações › Conexão: modo API, URL `https://cftv-api.seudominio.com.br` e o token.
+1. No `.env` do monitor, tokens fortes em `API_READ_TOKEN`/`API_ADMIN_TOKEN` (`openssl rand -hex 32`) e `ALLOW_ANONYMOUS_READ=false`. Reinicie o container.
+2. Na Vercel, variáveis `CFTV_API_URL=https://cftv-api.seudominio.com.br` e `CFTV_API_TOKEN=<API_ADMIN_TOKEN>`, e Redeploy. O painel passa a falar com o monitor pela própria Vercel, depois do login, e o token não vai para o navegador (ver “Login do painel” no README da raiz).
+   Alternativa sem proxy: Configurações › Conexão com a URL do túnel e o token, e `CORS_ORIGINS=https://cftv-potencial.vercel.app` no `.env`.
 
 As fotos usam o mesmo token das outras rotas; sem token a API responde 401.
 

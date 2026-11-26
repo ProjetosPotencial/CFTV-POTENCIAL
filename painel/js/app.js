@@ -140,9 +140,15 @@
     const c = DB.conn();
     $("#sidebarFoot").innerHTML = `<div style="margin-bottom:6px">${c.mode === "demo" ? '<span class="mode-pill demo">● Modo demonstração</span>' : '<span class="mode-pill api">● Conectado à API</span>'}</div>
       <div>${c.mode === "demo" ? "Dados simulados no navegador. Nada real é alterado." : esc(c.apiBase || "mesma origem")}</div>
-      <button class="btn sm theme-btn" data-act="theme">${ic("theme")} Tema: ${({ light: "claro", dark: "escuro" })[themeGet()] || "do sistema"}</button>`;
+      <button class="btn sm theme-btn" data-act="theme">${ic("theme")} Tema: ${({ light: "claro", dark: "escuro" })[themeGet()] || "do sistema"}</button>${loginUser() ? `
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Conectado como <b>${esc(loginUser())}</b></span><a class="btn sm" href="/sair">Sair</a></div>` : ""}`;
     const crit = S && S.alerts.some((a) => a.severity === "critico" && !a.ack);
     $("#sealDot").style.background = crit ? "var(--bad)" : "var(--ok)";
+  }
+  // Usuário do login da Vercel (cookie informativo gravado pelo middleware.js).
+  function loginUser() {
+    const m = document.cookie.match(/(?:^|;\s*)cftv_usuario=([^;]+)/);
+    try { return m ? decodeURIComponent(m[1]) : ""; } catch (e) { return ""; }
   }
   function tickInfo() {
     if (!lastLoad) return;
@@ -1040,8 +1046,8 @@
     } else if (tab === "conexao") {
       body = `<form id="fConn" style="max-width:640px;display:flex;flex-direction:column;gap:14px">
         <div class="field"><label>Fonte de dados</label><select class="select" name="mode">${opt("demo", "Demonstração (dados simulados no navegador)", c.mode)}${opt("api", "API do servidor Potencial CFTV", c.mode)}</select></div>
-        <div class="field"><label>URL da API</label><input class="input mono" name="apiBase" placeholder="https://cftv-api.seudominio.com.br" value="${esc(c.apiBase)}"><span class="hint">Vazio = mesma origem (quando o painel é servido pelo próprio FastAPI). Na Vercel, use a URL HTTPS publicada do servidor.</span></div>
-        <div class="field"><label>Token de acesso</label><input class="input mono" type="password" name="apiToken" autocomplete="off" placeholder="${c.apiToken ? "•••••••• (salvo neste navegador)" : "opcional"}"><span class="hint">Enviado como “Authorization: Bearer”. Fica só neste navegador.</span></div>
+        <div class="field"><label>URL da API</label><input class="input mono" name="apiBase" placeholder="https://cftv-api.seudominio.com.br" value="${esc(c.apiBase)}"><span class="hint">Vazio = mesma origem. Na Vercel com CFTV_API_URL configurada, deixe vazio (a Vercel encaminha para o monitor e guarda o token). Sem isso, use a URL HTTPS publicada do servidor.</span></div>
+        <div class="field"><label>Token de acesso</label><input class="input mono" type="password" name="apiToken" autocomplete="off" placeholder="${c.apiToken ? "•••••••• (salvo neste navegador)" : "opcional"}"><span class="hint">Enviado como “Authorization: Bearer”. Fica só neste navegador. Com a URL vazia na Vercel, deixe vazio também.</span></div>
         <div class="callout info">${ic("info")}<div>A Vercel não alcança a rede 192.168.0.x. Para dados reais, a API precisa estar publicada com HTTPS (por exemplo, Cloudflare Tunnel ou Tailscale Funnel) e liberar CORS para o domínio do painel.</div></div>
         <div style="display:flex;gap:8px"><button class="btn primary" type="submit">Salvar e recarregar</button><button class="btn" type="button" data-act="testConn">Testar conexão</button></div>
         <div id="connOut"></div></form>`;

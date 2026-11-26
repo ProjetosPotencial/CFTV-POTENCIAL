@@ -46,16 +46,37 @@ Status esperados: DVR `ONLINE | OFFLINE | INSTAVEL | NAO_VERIFICADO | ERRO_AUTEN
 ## Publicar na Vercel
 
 1. Importe este repositório na Vercel (Add New › Project).
-2. Pode deixar tudo no padrão: o `vercel.json` da raiz já publica a pasta `painel` (sem build). Se preferir, também funciona com Root Directory = **painel**.
-3. Deploy. Recomendo ativar *Deployment Protection* (senha ou login Vercel), porque o painel mostra o inventário das lojas.
+2. Pode deixar tudo no padrão: o `vercel.json` da raiz já publica a pasta `painel` (sem build). O Root Directory precisa ficar na **raiz** do repositório, porque o login (`middleware.js`) mora lá.
+3. Configure as variáveis do login (abaixo) e faça o deploy.
+
+## Login do painel
+
+O arquivo `middleware.js` roda no servidor da Vercel antes de entregar qualquer arquivo. Sem login válido, nada do painel sai para o navegador (nem o HTML, nem o `data.js` com o inventário, nem as fotos). Não é só uma tela no navegador: quem não entrou recebe 401 ou é mandado para `/login`.
+
+Em Vercel › Project › Settings › Environment Variables (ambiente Production):
+
+| Variável | Obrigatória | O que é |
+|---|---|---|
+| `PAINEL_USUARIO` | sim | usuário de acesso |
+| `PAINEL_SENHA` | sim | senha de acesso (use uma forte) |
+| `PAINEL_USUARIOS` | não | vários acessos de uma vez: `joao:senha1,maria:senha2` |
+| `PAINEL_SEGREDO` | não | chave das sessões (`openssl rand -hex 32`). Sem ela, a chave sai das senhas: trocar uma senha derruba todas as sessões |
+| `PAINEL_SESSAO_HORAS` | não | quanto tempo o login vale (padrão 12) |
+| `CFTV_API_URL` | não | URL HTTPS do monitor (Cloudflare Tunnel), ex. `https://cftv-api.seudominio.com.br` |
+| `CFTV_API_TOKEN` | não | token da API do monitor (`API_ADMIN_TOKEN` para poder cadastrar, ou `API_READ_TOKEN` só para ver) |
+
+Depois de criar ou mudar variáveis, faça um **Redeploy** (Deployments › ⋯ › Redeploy), porque a Vercel só lê as variáveis em um deploy novo. Sem `PAINEL_USUARIO`/`PAINEL_SENHA` o painel fica bloqueado (falha fechada). Para sair: botão **Sair** no rodapé do menu, ou `/sair`.
 
 ## Ligar aos dados reais
 
-A Vercel não alcança a rede `192.168.0.x`. Para o modo API funcionar a partir da Vercel:
+A Vercel não alcança a rede interna das lojas. O caminho recomendado:
 
-1. Publique a API do servidor com HTTPS (por exemplo Cloudflare Tunnel ou Tailscale Funnel).
-2. Libere CORS no FastAPI para o domínio do painel na Vercel.
-3. Exija um token (`Authorization: Bearer`) nas rotas `/api`.
-4. No painel, abra Configurações › Conexão, escolha “API”, informe a URL e o token.
+1. Publique a API do monitor com HTTPS (Cloudflare Tunnel, ver `servidor/README.md`). A API já exige token em todas as rotas `/api` (menos `/api/health`), inclusive nas fotos.
+2. Na Vercel, preencha `CFTV_API_URL` e `CFTV_API_TOKEN` e faça Redeploy.
+3. Pronto: o painel abre direto no modo API e chama `/api/...` na própria Vercel, que confere o login e repassa para o monitor com o token. O token fica só na Vercel, nunca no navegador, e quem não fez login não vê dados nem fotos.
+
+Se em algum navegador você já tinha salvo uma URL/token em Configurações › Conexão, deixe os dois campos **vazios** e o modo em “API” para usar esse caminho.
+
+Ainda funciona o jeito antigo (URL do túnel e token digitados em Configurações › Conexão, com CORS liberado no monitor), mas aí o token fica guardado no navegador.
 
 Senhas dos DVRs nunca são exibidas: o formulário só envia uma senha nova quando ela é digitada, e o backend deve guardá-la criptografada.

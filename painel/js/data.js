@@ -214,6 +214,7 @@
     } catch (e) {
       throw new ApiError("Não foi possível falar com a API (" + (c.apiBase || "mesma origem") + "). Verifique a URL, o HTTPS e o CORS.", 0);
     }
+    if (res.status === 401 && res.headers.get("X-Painel-Login")) { location.href = "/login?next=" + encodeURIComponent(location.pathname + location.hash); throw new ApiError("Sessão expirada. Entre de novo.", 401); }
     if (res.status === 404) throw new ApiError("Rota " + method + " " + path + " ainda não existe no backend.", 404);
     if (res.status === 401 || res.status === 403) throw new ApiError("Acesso negado pela API. Confira o token em Configurações.", res.status);
     if (!res.ok) {
