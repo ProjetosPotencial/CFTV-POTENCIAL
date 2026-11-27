@@ -728,7 +728,7 @@
     const m = openModal(`${modalHead("Teste de conectividade", esc(storeName(d.store_id)) + " · " + esc(d.serial))}<div class="modal-b"><div class="log" id="tLog"><span class="dim">Iniciando teste…</span></div></div><div class="modal-f"><button class="btn" data-close>Fechar</button></div>`, { size: "sm" });
     try {
       const r = await (btn ? busy(btn, () => DB.testDevice(id)) : DB.testDevice(id));
-      $("#tLog", m.el).innerHTML = (r.steps || []).map((s) => `<div class="${s.ok === true ? "ok" : s.ok === false ? "bad" : "warn"}">${s.ok === true ? "✔" : s.ok === false ? "✖" : "•"} ${esc(s.text)}</div>`).join("") + `<div class="dim" style="margin-top:6px">Resultado: ${esc((DB.DEV_STATUS[r.status] || {}).label || r.status)}</div>`;
+      $("#tLog", m.el).innerHTML = (r.steps || []).map((s) => `<div class="${s.ok === true ? "ok" : s.ok === false ? "bad" : "warn"}">${s.ok === true ? "✔" : s.ok === false ? "✖" : "•"} ${esc(s.text)}</div>`).join("") + `<div class="dim" style="margin-top:6px">Resultado${r.simulated ? " (simulado)" : ""}: ${esc((DB.DEV_STATUS[r.status] || {}).label || r.status)}</div>`;
       await reload(true); render();
     } catch (e) { $("#tLog", m.el).innerHTML = `<div class="bad">✖ ${esc(e.message)}</div>`; }
   }

@@ -466,11 +466,11 @@
       const st = demoState();
       const d = st.devices.find((x) => x.id === id);
       await sleep(900);
-      const steps = [];
+      const steps = [{ ok: null, text: "SIMULAÇÃO: o painel está em modo demonstração e não conectou no DVR. Para um teste real, ligue o painel à API do monitor em Configurações." }];
       if (!d.host) {
         steps.push({ ok: false, text: "Sem IP/hostname. Conexão " + (d.p2p_mode || d.mode || "P2P") + " não tem rota direta para o servidor." });
         steps.push({ ok: null, text: "Cadastre o IP da VPN/Tailscale/MikroTik para monitorar este DVR." });
-        return { ok: false, status: d.status, steps };
+        return { ok: false, status: d.status, steps, simulated: true };
       }
       const down = d.status === "OFFLINE";
       steps.push({ ok: !down, text: `TCP ${d.host}:${d.port} ` + (down ? `sem resposta (timeout ${st.settings.timeout_s} s × ${st.settings.retries})` : `respondeu em ${d.latency_ms || 32} ms`) });
@@ -480,7 +480,7 @@
         steps.push({ ok: auth, text: auth ? "Autenticação aceita (usuário " + (d.username || "—") + ")" : "Autenticação recusada (401)" });
       }
       d.last_check = nowIso(); demoSave();
-      return { ok: !down && d.status !== "ERRO_AUTENTICACAO", status: d.status, steps };
+      return { ok: !down && d.status !== "ERRO_AUTENTICACAO", status: d.status, steps, simulated: true };
     },
     async discoverOnvif(id) {
       if (conn().mode === "api") return http("POST", "/api/devices/" + id + "/onvif/discover");
@@ -538,7 +538,7 @@
       const c = st.channels.find((x) => x.id === id);
       const d = st.devices.find((x) => x.id === c.device_id);
       await sleep(1100);
-      const steps = [];
+      const steps = [{ ok: null, text: "SIMULAÇÃO: modo demonstração, nenhuma conexão real com a câmera." }];
       if (!d.host) return { ok: false, status: c.status, steps: [{ ok: false, text: "DVR sem rota direta (P2P/Relay). Não é possível abrir o RTSP." }] };
       if (d.status === "OFFLINE") return { ok: false, status: "OFFLINE", steps: [{ ok: false, text: "DVR offline: o canal não pode ser testado." }] };
       if (d.status === "ERRO_AUTENTICACAO") return { ok: false, status: "ERRO_AUTENTICACAO", steps: [{ ok: false, text: "RTSP recusou as credenciais (401)." }] };
