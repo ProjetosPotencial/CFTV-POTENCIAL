@@ -16,7 +16,7 @@ O que chega: perda de vídeo, câmera offline, erro de HD / sem HD / HD cheio, r
 
 ## 2. Caixa de e-mail que recebe os alertas (uma vez)
 
-Use uma conta Google só para isso (ex.: uma conta Gmail nova ou uma caixa do Google Workspace da empresa).
+Pode ser uma conta Google nova ou uma caixa que já é usada no dia a dia (Gmail ou Google Workspace da empresa). O script só mexe nos e-mails cujo **assunto tem "CFTV"**: não marca nada como lido, não apaga e não move. Ele só põe o marcador **CFTV-DVR** nessas conversas, para você achar (e, se quiser, criar um filtro do Gmail que pule a caixa de entrada para elas).
 
 1. Ative a verificação em duas etapas e crie uma **senha de app** (Conta Google › Segurança › Senhas de app). É essa senha que vai no DVR, não a senha da conta.
 2. Abra <https://script.google.com> logado nessa conta › **Novo projeto**.
@@ -27,7 +27,7 @@ Use uma conta Google só para isso (ex.: uma conta Gmail nova ou uma caixa do Go
 5. Volte ao editor, escolha a função `enviarTeste` › **Executar** › autorize. Deve aparecer `200 {"ok":true,...}` e a notificação surge na tela **Notificações DVR** em Barão de Cocais.
 6. Escolha `instalarAgendamento` › **Executar** (uma vez só). A partir daí o script roda sozinho a cada minuto.
 
-O script só lê e-mails **não lidos** da caixa de entrada e marca como lidos depois de entregar ao painel. Se a caixa receber outros e-mails, preencha a propriedade `FILTRO` (ex.: `subject:CFTV`).
+Por isso o **Assunto de todo DVR precisa começar com `CFTV`**. Para usar outro critério, preencha a propriedade `FILTRO` com uma busca do Gmail (ex.: `from:dvr@empresa.com.br`).
 
 ## 3. Em cada DVR (Intelbras MHDX)
 
@@ -36,7 +36,7 @@ Pela interface web do DVR ou pelo próprio monitor do DVR:
 **Rede › E-mail**
 - Habilitar: sim
 - Servidor SMTP: `smtp.gmail.com` · Porta `465` · Criptografia **SSL** (se o DVR só tiver TLS, use porta `587`)
-- Usuário: o e-mail da caixa de alertas · Senha: a **senha de app**
+- Usuário: o e-mail da caixa de alertas · Senha: a **senha de app** (no Google Workspace, se "Senhas de app" não aparecer, o administrador precisa liberar a verificação em duas etapas para a conta)
 - Remetente: o mesmo e-mail · Destinatário: o mesmo e-mail
 - **Assunto: `CFTV <nome da loja> <número de série>`**, ex.: `CFTV Barao de Cocais IMRG13045096H`. O número de série no assunto é o que liga a notificação à loja certa.
 - Se existir a opção de **e-mail de teste periódico / saúde / intervalo de envio**, ligue com o maior intervalo disponível (ex.: a cada 12 ou 24 h). É isso que mostra que o DVR está vivo mesmo sem eventos.
