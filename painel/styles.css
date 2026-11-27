@@ -462,3 +462,11 @@ svg .seg:hover { opacity: .75; }
   .sidebar, .topbar, .toolbar, .btn { display: none !important; }
   .app { display: block; }
 }
+
+/* ---------- notificações dos DVRs ---------- */
+.nt-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); align-content: start; }
+.nt-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; border-left: 4px solid var(--accent, var(--border-strong)); cursor: pointer; transition: box-shadow var(--d-base) var(--ease-standard), transform var(--d-base) var(--ease-standard); }
+.nt-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.nt-card-h { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.nt-mini { font-size: 12.5px; color: var(--text-default); display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--border-subtle); padding-top: 6px; }
+@media (max-width: 560px) { .nt-grid { grid-template-columns: 1fr; } }

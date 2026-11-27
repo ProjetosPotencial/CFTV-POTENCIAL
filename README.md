@@ -1,6 +1,7 @@
 # Potencial CFTV
 
 - `painel/`: painel web (HTML/CSS/JS, publicado na Vercel).
+- `api/dvr-eventos.js` + `encaminhador/`: notificações enviadas pelos próprios DVRs (e-mail → painel), sem VPN. Veja [encaminhador/README.md](encaminhador/README.md).
 - `servidor/`: serviço de monitoramento real (FastAPI + PostgreSQL + FFmpeg/ONVIF) que implementa as rotas abaixo. Veja [servidor/README.md](servidor/README.md).
 
 ## Painel
@@ -63,6 +64,8 @@ Em Vercel › Project › Settings › Environment Variables (ambiente Productio
 | `PAINEL_SEGREDO` | não | chave das sessões (`openssl rand -hex 32`). Sem ela, a chave sai das senhas: trocar uma senha derruba todas as sessões |
 | `PAINEL_SESSAO_HORAS` | não | quanto tempo o login vale (padrão 12) |
 | `CFTV_API_URL` | não | URL HTTPS do monitor (Cloudflare Tunnel), ex. `https://cftv-api.seudominio.com.br` |
+| `DVR_WEBHOOK_TOKEN` | não | segredo do encaminhador de e-mails dos DVRs (tela Notificações DVR) |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | não | banco Upstash Redis das notificações (criadas pela Vercel em Storage › Upstash for Redis) |
 | `CFTV_API_TOKEN` | não | token da API do monitor (`API_ADMIN_TOKEN` para poder cadastrar, ou `API_READ_TOKEN` só para ver) |
 
 Depois de criar ou mudar variáveis, faça um **Redeploy** (Deployments › ⋯ › Redeploy), porque a Vercel só lê as variáveis em um deploy novo. Sem `PAINEL_USUARIO`/`PAINEL_SENHA` o painel fica bloqueado (falha fechada). Para sair: botão **Sair** no rodapé do menu, ou `/sair`.
