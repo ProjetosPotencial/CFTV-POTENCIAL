@@ -29,9 +29,9 @@ function users() {
   const list = new Map();
   for (const item of env("PAINEL_USUARIOS").split(",")) {
     const i = item.indexOf(":");
-    if (i > 0) list.set(item.slice(0, i).trim(), item.slice(i + 1).trim());
+    if (i > 0) list.set(item.slice(0, i).trim().toLowerCase(), item.slice(i + 1).trim());
   }
-  if (env("PAINEL_USUARIO") && env("PAINEL_SENHA")) list.set(env("PAINEL_USUARIO"), env("PAINEL_SENHA"));
+  if (env("PAINEL_USUARIO") && env("PAINEL_SENHA")) list.set(env("PAINEL_USUARIO").toLowerCase(), env("PAINEL_SENHA"));
   for (const [u, p] of list) if (!u || !p) list.delete(u);
   return list;
 }
@@ -138,7 +138,7 @@ button{width:100%;margin-top:20px;padding:12px;border:0;border-radius:10px;backg
   <h1>Entrar no painel</h1><p>Acesso restrito à equipe autorizada.</p>
   ${error ? `<div class="err" role="alert">${esc(error)}</div>` : ""}
   <input type="hidden" name="next" value="${esc(next)}">
-  <label for="u">Usuário</label><input id="u" name="usuario" autocomplete="username" required autofocus>
+  <label for="u">Usuário</label><input id="u" name="usuario" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required autofocus>
   <label for="p">Senha</label><input id="p" name="senha" type="password" autocomplete="current-password" required>
   <button type="submit">Entrar</button>
 </form></body></html>`;
@@ -212,8 +212,9 @@ export default async function middleware(request) {
       } catch (e) {
         return loginPage({ error: "Não foi possível ler o formulário.", status: 400 });
       }
-      const user = String(form.get("usuario") || "").trim();
-      const pass = String(form.get("senha") || "");
+      // Usuário sem diferença de maiúsculas (celular costuma pôr a 1ª letra maiúscula); senha sem espaços nas pontas.
+      const user = String(form.get("usuario") || "").trim().toLowerCase();
+      const pass = String(form.get("senha") || "").trim();
       const next = safeNext(String(form.get("next") || "/"));
       const expected = list.get(user);
       // Compara sempre, mesmo com usuário inexistente, para não revelar quais usuários existem.
