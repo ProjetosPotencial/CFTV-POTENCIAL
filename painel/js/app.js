@@ -35,6 +35,7 @@
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     slack: '<path d="M14.5 10a1.5 1.5 0 0 1 0-3h5a1.5 1.5 0 0 1 0 3zM10 9.5a1.5 1.5 0 0 1-3 0v-5a1.5 1.5 0 0 1 3 0zM9.5 14a1.5 1.5 0 0 1 0 3h-5a1.5 1.5 0 0 1 0-3zM14 14.5a1.5 1.5 0 0 1 3 0v5a1.5 1.5 0 0 1-3 0z"/>',
     chev: '<path d="M9 18l6-6-6-6"/>',
+    sino: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
     theme: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"/>',
   };
   const ic = (n, extra) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra || ""}>${I[n] || ""}</svg>`;
@@ -130,7 +131,7 @@
   // ---------------------------------------------------------------- menu / chrome
   const PAGES = [
     ["dashboard", "Dashboard", "dashboard"], ["lojas", "Lojas", "loja"], ["dvrs", "DVRs", "dvr"], ["canais", "Canais", "canal"],
-    ["monitoramento", "Monitoramento", "monitor"], ["alertas", "Alertas", "alerta"], ["historico", "Histórico", "historico"],
+    ["monitoramento", "Monitoramento", "monitor"], ["alertas", "Alertas", "alerta"], ["notificacoes", "Notificações DVR", "sino"], ["historico", "Histórico", "historico"],
     ["relatorios", "Relatórios", "relatorio"], ["configuracoes", "Configurações", "config"],
   ];
   function updateChrome() {
@@ -937,6 +938,179 @@
     if (a.channel_id) channelDrawer(a.channel_id); else deviceDrawer(a.device_id, "hist");
   }
 
+  // ================================================================ NOTIFICAÇÕES DOS DVRs
+  // Os próprios DVRs mandam e-mail nos eventos; um encaminhador repassa para /api/dvr-eventos
+  // (função da Vercel). Esta tela lê de lá, independente do modo demo/API.
+  const NT_TYPES = {
+    PERDA_VIDEO: { label: "Perda de vídeo", sev: "critico" },
+    CAMERA_OFFLINE: { label: "Câmera offline", sev: "critico" },
+    HD_ERRO: { label: "Erro de HD", sev: "critico" },
+    HD_CHEIO: { label: "HD sem espaço", sev: "atencao" },
+    SEM_GRAVACAO: { label: "Sem gravação", sev: "critico" },
+    REDE: { label: "Rede / desconexão", sev: "critico" },
+    CONFLITO_IP: { label: "Conflito de IP", sev: "atencao" },
+    ACESSO_ILEGAL: { label: "Acesso ilegal", sev: "critico" },
+    MASCARAMENTO: { label: "Mascaramento", sev: "atencao" },
+    MOVIMENTO: { label: "Movimento", sev: "info" },
+    ALARME: { label: "Alarme", sev: "atencao" },
+    TESTE: { label: "Teste / saúde", sev: "info" },
+    OUTRO: { label: "Outro", sev: "info" },
+  };
+  const NT_PROBLEM = ["PERDA_VIDEO", "CAMERA_OFFLINE", "HD_ERRO", "HD_CHEIO", "SEM_GRAVACAO", "REDE", "CONFLITO_IP", "ACESSO_ILEGAL", "MASCARAMENTO", "ALARME"];
+  const NT_LS_SILENCIO = "pcftv-dvr-silencio-h";
+  const NT = { state: "idle", data: null, at: 0, error: "" };
+  const ntFold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  function ntSilenceH() { try { return Math.max(1, Number(localStorage.getItem(NT_LS_SILENCIO)) || 24); } catch (e) { return 24; } }
+  function ntBadge(ev) {
+    const t = NT_TYPES[ev.type] || NT_TYPES.OUTRO;
+    const sev = ev.recovered ? "ok" : ev.severity || t.sev;
+    const cls = sev === "critico" ? "s-bad" : sev === "atencao" ? "s-orange" : sev === "ok" ? "s-ok" : "s-info";
+    return `<span class="badge ${cls}">${esc(t.label)}${ev.recovered ? " · normalizou" : ""}</span>`;
+  }
+  const ntTs = (ev) => ev.received_at || ev.ts;
+
+  async function ntLoad() {
+    NT.state = NT.data ? "refresh" : "loading";
+    try {
+      const r = await fetch("/api/dvr-eventos?limit=1500", { credentials: "same-origin", headers: { accept: "application/json" } });
+      if (r.status === 404) { NT.state = "ausente"; NT.error = ""; }
+      else if (r.status === 401) { NT.state = "erro"; NT.error = "Sessão expirada. Entre de novo no painel."; }
+      else {
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) { NT.state = "erro"; NT.error = body.detail || "Erro " + r.status; NT.data = body.configured ? Object.assign({ events: [], seen: {} }, NT.data, { configured: body.configured }) : NT.data; }
+        else { NT.state = "ok"; NT.error = ""; NT.data = body; }
+      }
+    } catch (e) {
+      NT.state = NT.data ? "ok" : "ausente";
+    }
+    NT.at = Date.now();
+  }
+
+  // Liga cada notificação a uma loja: pelo nº de série (assunto/corpo/remetente) ou pelo nome da loja no assunto.
+  function ntMatcher() {
+    const bySerial = {};
+    S.devices.forEach((d) => { if (d.serial) bySerial[String(d.serial).toUpperCase()] = d; });
+    const names = S.stores.map((s) => ({ id: s.id, key: ntFold(s.name) })).filter((s) => s.key.length >= 4).sort((a, b) => b.key.length - a.key.length);
+    return function (ev) {
+      for (const sr of ev.serials || []) { const d = bySerial[String(sr).toUpperCase()]; if (d) return { store_id: d.store_id, device_id: d.id }; }
+      const hay = ntFold([ev.subject, ev.device_name, ev.from].join(" "));
+      const n = names.find((s) => hay.includes(s.key));
+      return n ? { store_id: n.id, device_id: ((idx.devByStore[n.id] || [])[0] || {}).id || null } : null;
+    };
+  }
+
+  function ntModel() {
+    const data = NT.data || { events: [], seen: {} };
+    const match = ntMatcher();
+    const events = (data.events || []).map((e) => Object.assign({}, e, match(e) || {}));
+    const lastByStore = {};
+    const bump = (sid, ts) => { if (sid && ts && (!lastByStore[sid] || ts > lastByStore[sid])) lastByStore[sid] = ts; };
+    events.forEach((e) => bump(e.store_id, ntTs(e)));
+    Object.values(data.seen || {}).forEach((v) => { const m = match(v); if (m) bump(m.store_id, v.ts); });
+    const silenceMs = ntSilenceH() * 3600e3;
+    const stores = S.stores.map((s) => {
+      const evs = events.filter((e) => e.store_id === s.id);
+      // Problema aberto: último evento de cada (tipo, canal) é um problema e não normalizou (últimos 7 dias).
+      const latest = {};
+      evs.forEach((e) => { const k = e.type + ":" + (e.channel || ""); if (!latest[k]) latest[k] = e; });
+      const open = Object.values(latest).filter((e) => NT_PROBLEM.includes(e.type) && !e.recovered && Date.now() - Date.parse(ntTs(e)) < 7 * 864e5);
+      const last = lastByStore[s.id] || null;
+      const status = !last ? "NUNCA" : Date.now() - Date.parse(last) > silenceMs ? "SILENCIO" : open.length ? "PROBLEMA" : "OK";
+      return { store: s, events: evs, open, last, status };
+    });
+    const unmatched = events.filter((e) => !e.store_id);
+    return { data, events, stores, unmatched };
+  }
+  const NT_STATUS = {
+    PROBLEMA: { label: "Com problema", cls: "s-bad", color: "var(--bad)" },
+    SILENCIO: { label: "Sem notícias", cls: "s-orange", color: "var(--orange)" },
+    OK: { label: "Recebendo", cls: "s-ok", color: "var(--ok)" },
+    NUNCA: { label: "Nunca enviou", cls: "s-idle", color: "var(--idle)" },
+  };
+
+  function ntSetupCallout(cfg) {
+    const steps = [
+      ["Banco de dados", cfg.storage, "Vercel › projeto cftv-potencial › Storage › Upstash for Redis › Connect Project (gratuito; cria as variáveis sozinho)."],
+      ["Token do encaminhador", cfg.token, "Vercel › Settings › Environment Variables › DVR_WEBHOOK_TOKEN com um valor secreto longo, depois Redeploy."],
+      ["E-mail dos DVRs + encaminhador", null, "No DVR: Rede › E-mail apontando para a caixa que recebe os alertas, com o nº de série no Assunto. Na caixa: o script do encaminhador (passo a passo em encaminhador/README.md)."],
+    ];
+    return `<div class="callout info">${ic("info")}<div><b>Como ligar as notificações dos DVRs</b>
+      <ol style="margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px">${steps.map(([t, ok, d]) => `<li><b>${t}</b> ${ok === true ? '<span class="badge s-ok">pronto</span>' : ok === false ? '<span class="badge s-warn">falta</span>' : ""}<br><span class="muted">${d}</span></li>`).join("")}</ol>
+      <div style="margin-top:8px"><a href="https://github.com/projetospotencial/cftv-potencial/blob/main/encaminhador/README.md" target="_blank" rel="noopener">Abrir o passo a passo completo</a></div></div></div>`;
+  }
+
+  VIEWS.notificacoes = function (p) {
+    if (NT.state === "idle") { ntLoad().then(() => { if (currentPage === "notificacoes" && !$(".overlay")) render(); }); }
+    if (NT.state === "idle" || NT.state === "loading") return { title: "Notificações dos DVRs", sub: "Alertas enviados pelos próprios aparelhos", html: '<div class="empty"><span class="spin"></span> Carregando notificações…</div>' };
+    if (NT.state === "ausente") {
+      return { title: "Notificações dos DVRs", sub: "Alertas enviados pelos próprios aparelhos", html: `<div class="callout warn">${ic("alerta")}<div><b>O receptor de notificações não respondeu.</b><br>Ele roda na Vercel (rota /api/dvr-eventos). Abrindo o painel fora da Vercel (arquivo local), esta tela fica vazia.</div></div>${ntSetupCallout({ storage: null, token: null })}` };
+    }
+    const M = ntModel();
+    const cfg = M.data.configured || {};
+    const showMov = p.mov === "1";
+    const f = p.filtro || "todas";
+    const counts = { todas: M.stores.length };
+    Object.keys(NT_STATUS).forEach((k) => { counts[k] = M.stores.filter((s) => s.status === k).length; });
+    const order = { PROBLEMA: 0, SILENCIO: 1, OK: 2, NUNCA: 3 };
+    const list = M.stores.filter((s) => f === "todas" || s.status === f).sort((a, b) => order[a.status] - order[b.status] || (b.last || "").localeCompare(a.last || "") || a.store.name.localeCompare(b.store.name, "pt-BR"));
+    const day = M.events.filter((e) => Date.now() - Date.parse(ntTs(e)) < 864e5);
+    const visible = (e) => showMov || e.type !== "MOVIMENTO";
+    const feed = M.events.filter(visible).slice(0, 40);
+    const silH = ntSilenceH();
+    const card = (x) => {
+      const st = NT_STATUS[x.status];
+      const dv = (idx.devByStore[x.store.id] || [])[0];
+      const evs = x.events.filter(visible).slice(0, 4);
+      return `<div class="card nt-card clickable" data-ntstore="${x.store.id}" style="--accent:${st.color}">
+        <div class="nt-card-h"><div style="min-width:0"><div class="row-title">${esc(x.store.name)}</div><div class="row-sub mono">${esc(dv ? dv.serial : "sem DVR")}</div></div><span class="badge ${st.cls}">${st.label}</span></div>
+        <div class="row-sub">Último contato: <b>${x.last ? fmtAgo(x.last) : "nunca"}</b></div>
+        ${x.open.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${x.open.slice(0, 4).map((e) => ntBadge(e) + (e.channel ? `<span class="tag">CH ${e.channel}</span>` : "")).join("")}</div>` : ""}
+        ${evs.length ? `<div class="nt-mini">${evs.map((e) => `<div><span class="mono faint">${shortAgo(ntTs(e))}</span> ${esc((NT_TYPES[e.type] || NT_TYPES.OUTRO).label)}${e.channel ? " · CH" + e.channel : ""}${e.recovered ? " · normalizou" : ""}</div>`).join("")}</div>` : ""}
+      </div>`;
+    };
+    const html = `
+      ${!cfg.storage || !cfg.token || !M.events.length ? ntSetupCallout(cfg) : ""}
+      ${NT.state === "erro" ? `<div class="callout bad">${ic("alerta")}<div><b>Erro ao ler as notificações.</b><br>${esc(NT.error)}</div></div>` : ""}
+      <div class="grid kpis">
+        <div class="card kpi click" data-set="filtro" data-val="todas" style="--accent:var(--brand)"><span class="label">Notificações em 24 h</span><span class="value">${num(day.length)}</span><span class="foot">${num(day.filter((e) => NT_PROBLEM.includes(e.type) && !e.recovered).length)} de problema</span></div>
+        <div class="card kpi click" data-set="filtro" data-val="PROBLEMA" style="--accent:var(--bad)"><span class="label">Lojas com problema</span><span class="value">${counts.PROBLEMA}</span><span class="foot">aberto nos últimos 7 dias</span></div>
+        <div class="card kpi click" data-set="filtro" data-val="SILENCIO" style="--accent:var(--orange)"><span class="label">Sem notícias</span><span class="value">${counts.SILENCIO}</span><span class="foot">nada recebido há mais de ${silH} h</span></div>
+        <div class="card kpi click" data-set="filtro" data-val="NUNCA" style="--accent:var(--idle)"><span class="label">Nunca enviaram</span><span class="value">${counts.NUNCA}</span><span class="foot">de ${M.stores.length} lojas</span></div>
+      </div>
+      <div class="toolbar">
+        <div class="chips">${[["todas", "Todas"], ["PROBLEMA", "Com problema"], ["SILENCIO", "Sem notícias"], ["OK", "Recebendo"], ["NUNCA", "Nunca enviaram"]].map(([k, l]) => `<span class="chip ${f === k ? "active" : ""}" data-set="filtro" data-val="${k}">${l} <b>${counts[k]}</b></span>`).join("")}</div>
+        <span class="spacer"></span>
+        <span class="chip ${showMov ? "active" : ""}" data-set="mov" data-val="${showMov ? "" : "1"}">${showMov ? "Ocultar" : "Mostrar"} movimento</span>
+        <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:6px">Sem notícias após <select class="select" data-act-change="ntSilence" style="width:auto;height:32px">${[2, 6, 12, 24, 48, 72].map((h) => `<option value="${h}" ${h === silH ? "selected" : ""}>${h} h</option>`).join("")}</select></label>
+        <button class="btn sm" data-act="ntReload">${ic("refresh")} Atualizar</button>
+      </div>
+      <div class="grid g3">
+        <div class="nt-grid">${list.map(card).join("") || '<div class="empty">Nenhuma loja neste filtro.</div>'}</div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="card"><div class="card-h"><h3>Chegando agora</h3><span class="sub">${M.events.length} guardadas</span></div><div class="card-b"><div class="log" style="max-height:560px">${feed.map((e) => { const t = NT_TYPES[e.type] || NT_TYPES.OUTRO; const sev = e.recovered ? "ok" : e.severity || t.sev; return `<div><span class="dim">${fmtDate(ntTs(e))}</span> <span class="${sev === "critico" ? "bad" : sev === "atencao" ? "warn" : sev === "ok" ? "ok" : ""}">${esc(t.label)}${e.recovered ? " (normalizou)" : ""}</span> · ${e.store_id ? esc(storeName(e.store_id)) : '<span class="dim">' + esc(e.subject || e.from || "não identificado") + "</span>"}${e.channel ? " · CH" + e.channel : ""}</div>`; }).join("") || '<span class="dim">Nenhuma notificação recebida ainda.</span>'}</div></div></div>
+          ${M.unmatched.length ? `<div class="card"><div class="card-h"><h3>Não identificadas</h3><span class="sub">${M.unmatched.length}</span></div><div class="card-b" style="font-size:12.5px;display:flex;flex-direction:column;gap:8px">
+            <div class="muted">Não achei o nº de série nem o nome da loja. Coloque o nº de série no campo Assunto do e-mail do DVR.</div>
+            ${M.unmatched.slice(0, 8).map((e) => `<div><span class="mono faint">${fmtDate(ntTs(e))}</span> ${ntBadge(e)}<div class="row-sub">${esc([e.subject || "(sem assunto)", e.from].filter(Boolean).join(" · "))}</div></div>`).join("")}</div></div>` : ""}
+        </div>
+      </div>`;
+    return { title: "Notificações dos DVRs", sub: "Alertas enviados pelos próprios aparelhos, por loja", html };
+  };
+
+  function ntStoreDrawer(id) {
+    const x = ntModel().stores.find((s) => s.store.id === id);
+    if (!x) return;
+    const st = NT_STATUS[x.status];
+    const dv = idx.devByStore[id] || [];
+    openModal(`${modalHead(esc(x.store.name), dv.map((d) => esc(d.serial)).join(" · ") || "Sem DVR cadastrado")}
+      <div class="modal-b" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="badge ${st.cls}">${st.label}</span><span class="tag">Último contato: ${x.last ? fmtDate(x.last, true) + " (" + fmtAgo(x.last) + ")" : "nunca"}</span><span class="tag">${x.events.length} notificações guardadas</span></div>
+        ${x.open.length ? `<div><h4 style="margin-bottom:8px;font-size:13px">Problemas em aberto</h4><div style="display:flex;gap:6px;flex-wrap:wrap">${x.open.map((e) => ntBadge(e) + (e.channel ? `<span class="tag">CH ${e.channel}</span>` : "") + `<span class="muted" style="font-size:12px">${fmtAgo(ntTs(e))}</span>`).join("")}</div></div>` : ""}
+        ${x.events.length ? `<div class="table-wrap card"><table><thead><tr><th>Recebida</th><th>Evento</th><th>Canal</th><th>Detalhe</th></tr></thead><tbody>
+          ${x.events.slice(0, 200).map((e) => `<tr><td class="mono muted" style="white-space:nowrap">${fmtDate(ntTs(e))}</td><td>${ntBadge(e)}</td><td>${e.channel ? "CH " + e.channel : "—"}</td><td><div class="row-sub">${esc(e.event_name || e.subject || "")}</div>${e.text ? `<details><summary class="muted" style="font-size:12px;cursor:pointer">texto do e-mail</summary><div class="log" style="max-height:200px">${esc(e.text)}</div></details>` : ""}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">Nenhuma notificação desta loja ainda.</div>'}
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-store="${id}">${ic("loja")} Abrir loja</button></div>
+      </div>`, { drawer: true });
+  }
+
   // ================================================================ HISTÓRICO
   VIEWS.historico = function (p) {
     const page = Number(p.pag || 1);
@@ -1103,6 +1277,7 @@
   }
   const ACTIONS = {
     snapZoom: (el) => snapZoom(Number(el.dataset.id)),
+    async ntReload(el) { await busy(el, ntLoad); render(); },
     theme() { const order = ["", "light", "dark"]; themeSet(order[(order.indexOf(themeGet()) + 1) % 3]); updateChrome(); },
     newStore: () => storeForm(),
     editStore: (el) => storeForm(Object.assign({}, idx.store[el.dataset.id])),
@@ -1193,6 +1368,8 @@
     if (ch && ch.dataset.ch) { e.stopPropagation(); channelDrawer(Number(ch.dataset.ch)); return; }
     const dev = t.closest("[data-dev]");
     if (dev && dev.dataset.dev) { deviceDrawer(Number(dev.dataset.dev)); return; }
+    const nts = t.closest("[data-ntstore]");
+    if (nts) { ntStoreDrawer(Number(nts.dataset.ntstore)); return; }
     const st = t.closest("[data-store]");
     if (st && st.dataset.store) { storeDrawer(Number(st.dataset.store)); return; }
     const al = t.closest("[data-alert]");
@@ -1208,6 +1385,8 @@
     typing = setTimeout(() => { const pos = el.selectionStart; setParam(el.dataset.param, el.value); requestAnimationFrame(() => { const n = $(`[data-param="${el.dataset.param}"]`); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { /* ok */ } } }); }, 280);
   });
   document.addEventListener("change", (e) => {
+    const nsil = e.target.closest("[data-act-change=ntSilence]");
+    if (nsil) { try { localStorage.setItem(NT_LS_SILENCIO, nsil.value); } catch (x) { /* ok */ } render(); return; }
     const el = e.target.closest("[data-param]");
     if (!el || (el.tagName === "INPUT" && el.type !== "date")) return;
     const { page, params } = parseHash();
@@ -1224,6 +1403,10 @@
   setInterval(async () => {
     tickInfo();
     updateCountdown();
+    if (S && currentPage === "notificacoes" && NT.state !== "loading" && Date.now() - NT.at > 30e3 && !$(".overlay")) {
+      NT.at = Date.now();
+      ntLoad().then(() => { if (currentPage === "notificacoes" && !$(".overlay")) render(); });
+    }
     if (!S || Date.now() < nextCycle) return;
     nextCycle = Date.now() + cycleMs();
     if ($(".overlay")) { const ch = DB.tick(); announce(ch); return; } // não redesenha com formulário aberto

@@ -197,6 +197,10 @@ export default async function middleware(request) {
   const path = url.pathname;
   const list = users();
 
+  // Notificações dos DVRs: o encaminhador faz POST com o próprio token (DVR_WEBHOOK_TOKEN),
+  // conferido em api/dvr-eventos.js. Não passa pelo login do painel.
+  if (path === "/api/dvr-eventos" && request.method === "POST") return undefined;
+
   if (list.size === 0) {
     return new Response(
       "Painel bloqueado: configure PAINEL_USUARIO e PAINEL_SENHA nas variáveis de ambiente da Vercel e faça um novo deploy.",
@@ -250,7 +254,8 @@ export default async function middleware(request) {
     return new Response("Não autorizado.", { status: 401, headers: { ...NO_STORE, "Content-Type": "text/plain; charset=utf-8" } });
   }
 
-  if (path.startsWith("/api/")) {
+  // /api/dvr-eventos é atendida pela própria Vercel (api/dvr-eventos.js), não pelo monitor.
+  if (path.startsWith("/api/") && path !== "/api/dvr-eventos") {
     const res = await proxyApi(request, url);
     if (res) return res;
   }
