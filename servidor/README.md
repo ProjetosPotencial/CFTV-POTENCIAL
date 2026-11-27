@@ -99,6 +99,24 @@ O servidor só monitora o que ele alcança por IP. Um DVR que abre no app Intelb
 
 O container usa a rede bridge do Docker e sai pelas rotas do host, então rotas de VPN/Tailscale do servidor valem para ele. A descoberta automática ONVIF por multicast (WS-Discovery) só enxerga a rede local do servidor; para lojas, use a descoberta pelo IP.
 
+## Rodar num PC Windows (sem o servidor antigo)
+
+Para quando não há o servidor Linux com o banco antigo. O `compose.windows.yml` sobe **banco + monitor** juntos.
+
+1. Instale o **Docker Desktop** (com WSL2) e o **Git**. Deixe o Docker Desktop iniciando com o Windows.
+2. No PowerShell:
+   ```
+   git clone https://github.com/ProjetosPotencial/cftv-potencial
+   cd cftv-potencial
+   copy servidor\.env.windows.example servidor\.env.windows
+   notepad servidor\.env.windows      # preencha CFTV_SECRET_KEY e os tokens
+   docker compose -f servidor/compose.windows.yml up -d --build
+   ```
+3. Abra `http://localhost:8096`. O inventário (31 lojas, 31 DVRs, 141 canais) carrega sozinho.
+4. Atualizar depois: `git pull` e o mesmo `docker compose ... up -d --build`.
+
+Se o PC estiver **na mesma rede do DVR** (ex.: piloto na loja), o monitor já alcança o IP local do DVR sem VPN. Para outras lojas, o PC entra no Tailscale (no Windows as rotas das lojas entram sozinhas) e cada loja anuncia sua sub-rede. Teste de dentro do container: `docker exec potencial-cftv-monitor python -c "import socket;socket.create_connection(('IP_DO_DVR',37777),5);print('ok')"`.
+
 ## Configurações (`PUT /api/settings`)
 
 | Campo | Padrão | Limites |

@@ -1,0 +1,44 @@
+# Monitor completo num PC só (Windows com Docker Desktop, ou qualquer máquina sem o banco antigo).
+# Sobe o banco Postgres + o monitor juntos. Os dados ficam no volume "monitor_db".
+#
+#   copy servidor\.env.windows.example servidor\.env.windows   (e preencha)
+#   docker compose -f servidor/compose.windows.yml up -d --build
+#   painel/API em http://localhost:8096
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: potencial-cftv-monitor-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: potencial_cftv
+      POSTGRES_USER: cftv
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cftv-local}
+    volumes:
+      - monitor_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cftv -d potencial_cftv"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  potencial-cftv-monitor:
+    build:
+      context: ..
+      dockerfile: servidor/Dockerfile
+    image: potencial-cftv-monitor:latest
+    container_name: potencial-cftv-monitor
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.windows
+    environment:
+      DATABASE_URL: postgresql://cftv:${DB_PASSWORD:-cftv-local}@db:5432/potencial_cftv
+    ports:
+      - "8096:8096"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  monitor_db:
