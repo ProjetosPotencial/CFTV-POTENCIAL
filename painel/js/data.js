@@ -551,7 +551,7 @@
         c.status = "TRANSMITINDO"; c.last_frame = nowIso();
       }
       c.last_check = nowIso(); demoSave();
-      return { ok: c.status === "TRANSMITINDO", status: c.status, steps };
+      return { ok: c.status === "TRANSMITINDO", status: c.status, steps, simulated: true };
     },
 
     // ----- alertas, configurações, monitor -----

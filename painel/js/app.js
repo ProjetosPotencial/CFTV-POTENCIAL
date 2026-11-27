@@ -845,7 +845,7 @@
     target.innerHTML = `<div class="log"><span class="dim">ffprobe -rtsp_transport tcp -timeout ${S.settings.rtsp_timeout_s}s … (canal ${idx.ch[id].number})</span></div>`;
     try {
       const r = await (btn ? busy(btn, () => DB.testChannel(id)) : DB.testChannel(id));
-      target.innerHTML = `<div class="log">${(r.steps || []).map((s) => `<div class="${s.ok ? "ok" : "bad"}">${s.ok ? "✔" : "✖"} ${esc(s.text)}</div>`).join("")}<div class="dim" style="margin-top:6px">Resultado: ${esc((DB.CH_STATUS[r.status] || {}).label || r.status)}</div></div>`;
+      target.innerHTML = `<div class="log">${(r.steps || []).map((s) => `<div class="${s.ok === true ? "ok" : s.ok === false ? "bad" : "warn"}">${s.ok === true ? "✔" : s.ok === false ? "✖" : "•"} ${esc(s.text)}</div>`).join("")}<div class="dim" style="margin-top:6px">Resultado${r.simulated ? " (simulado)" : ""}: ${esc((DB.CH_STATUS[r.status] || {}).label || r.status)}</div></div>`;
       await reload(true); render();
     } catch (e) { target.innerHTML = `<div class="callout bad">${ic("alerta")}<div>${esc(e.message)}</div></div>`; }
   }
