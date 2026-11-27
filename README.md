@@ -19,7 +19,7 @@ O painel tem dois modos, escolhidos em **Configurações › Conexão** (ou em `
 
 | Modo | O que faz |
 |---|---|
-| `demo` (padrão) | Usa as 31 lojas e seriais reais do inventário com status e histórico **simulados**, gravados só no navegador. Nada real é alterado. |
+| `demo` (padrão) | Usa as 31 lojas e seriais reais do inventário mais 7 lojas vistas no SIM Next ainda sem DVR cadastrado (38 no total). O status segue o retrato do SIM Next de 27/11/2026; IPs e histórico são **simulados**, gravados só no navegador. Nada real é alterado. |
 | `api` | Lê e grava na API FastAPI do servidor Potencial CFTV. |
 
 ### Rotas que o painel usa no modo API

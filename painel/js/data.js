@@ -1,5 +1,6 @@
 /* Camada de dados do painel Potencial CFTV.
- * - Modo demo: dados de demonstração (31 lojas reais do inventário) gravados no navegador.
+ * - Modo demo: lojas reais do inventário + lojas vistas no SIM Next, com o status do retrato de 27/11/2026,
+ *              gravados no navegador.
  * - Modo api : conversa com a API FastAPI (rotas /api/stores, /api/devices, /api/channels,
  *              /api/events, /api/settings, /api/summary). Rotas extras que o backend ainda
  *              não tenha (testar, onvif, sincronizar) retornam um aviso claro na tela.
@@ -8,7 +9,7 @@
 (function () {
   "use strict";
 
-  const LS_KEY = "pcftv-demo-v2";
+  const LS_KEY = "pcftv-demo-v3";
   const LS_CONN = "pcftv-conn";
   const LS_ACK = "pcftv-acks";
 
@@ -73,6 +74,27 @@
     ["Três Corações", "HDCVI", "WALD51001198J", "P2P", 5],
     ["Tubarão SP 58", "Desconhecido", "PA3EA02105097", "P2P", 0],
   ];
+  // Lojas que aparecem no SIM Next mas ainda não têm DVR (serial) no inventário. Entram sem DVR.
+  const LOJAS_SEM_DVR = ["Almirante", "Araraquara", "Bandeirantes", "Campinas Bes… (nome a confirmar)", "Campo Mourão", "… Horizonte (nome a confirmar)", "Macapá"];
+  // Retrato do SIM Next em 27/11/2026 (prints da árvore de dispositivos).
+  // ONLINE = ícone cinza · ALERTA = triângulo azul · ATENCAO = bolinha amarela · OFFLINE = símbolo vermelho · EXPANSAO = loja nova em implantação
+  const SIM_NEXT = {
+    "209 Jaracaty": "ONLINE", "Barão de Cocais": "ONLINE", "Boqueiro": "OFFLINE", "Caconde": "ONLINE", "Campo Belo": "ONLINE",
+    "Congonhas": "ONLINE", "DF Novo Gama": "EXPANSAO", "Gov. Valadares": "ONLINE", "Guarapari": "ONLINE", "Guaxupé": "OFFLINE",
+    "Ibiporã": "ALERTA", "Ipatinga Horto": "OFFLINE", "Itapemirim": "ONLINE", "Juatuba BB": "ONLINE", "Loja Vespasiano": "ALERTA",
+    "MG 31 Ana Lucia": "OFFLINE", "MG 40 Jardim Alterosa": "OFFLINE", "MG 53 Coronel Fabriciano": "OFFLINE", "MG 64 Ubá": "OFFLINE",
+    "MG 68 Muriaé": "ONLINE", "MG Mateus Leme": "ONLINE", "Mococa": "ONLINE", "Pedro Leopoldo": "ONLINE", "Poços de Caldas": "ONLINE",
+    "Ponta Porã": "ATENCAO", "Ponte da Amizade": "ALERTA", "Pote": "ONLINE", "Pouso Alegre": "ONLINE", "Rio Pardo": "ONLINE",
+    "Três Corações": "ALERTA", "Almirante": "ATENCAO", "Araraquara": "ONLINE", "Bandeirantes": "ONLINE",
+    "Campinas Bes… (nome a confirmar)": "ONLINE", "Campo Mourão": "ONLINE", "… Horizonte (nome a confirmar)": "EXPANSAO", "Macapá": "EXPANSAO",
+  };
+  const SIM_NOTA = {
+    ONLINE: "SIM Next 27/11/2026: online, sem aviso.",
+    ALERTA: "SIM Next 27/11/2026: online, com aviso pendente (triângulo azul).",
+    ATENCAO: "SIM Next 27/11/2026: ícone amarelo, status a confirmar.",
+    OFFLINE: "SIM Next 27/11/2026: offline (sem conexão com o DVR).",
+    EXPANSAO: "Expansão do projeto: loja nova, cadastrada no SIM Next e ainda sem conexão.",
+  };
   const CAM_NOMES = ["Entrada", "Caixa", "Salão", "Estoque", "Fundos", "Estacionamento", "Corredor", "Escritório", "Doca", "Vitrine"];
 
   // ---------- utilitários ----------
@@ -96,13 +118,14 @@
     const now = Date.now();
     const H = 3600e3;
     const stores = [], devices = [], channels = [], events = [];
-    const forced = { 4: "OFFLINE", 12: "OFFLINE", 9: "INSTAVEL", 24: "ERRO_AUTENTICACAO" };
     INVENTARIO.forEach((row, i) => {
       const [name, model, serial, mode, nch] = row;
       const sid = i + 1;
-      stores.push({ id: sid, name, code: String(sid).padStart(2, "0"), city: "", notes: "" });
+      const sim = SIM_NEXT[name];
+      stores.push({ id: sid, name, code: String(sid).padStart(2, "0"), city: "", notes: SIM_NOTA[sim] || "" });
       const unknown = nch === 0;
-      const status = unknown ? "NAO_VERIFICADO" : forced[i] || "ONLINE";
+      // status do retrato do SIM Next; "aviso" e "amarelo" não dizem a causa, então ficam online / não verificado
+      const status = sim === "OFFLINE" ? "OFFLINE" : unknown || sim === "ATENCAO" || sim === "EXPANSAO" ? "NAO_VERIFICADO" : "ONLINE";
       const lastOk = status === "OFFLINE" ? now - (2 + r() * 30) * H : now - r() * 50e3;
       const dev = {
         id: sid, store_id: sid, manufacturer: unknown ? "" : "Intelbras", model, serial,
@@ -121,7 +144,7 @@
         let st = "TRANSMITINDO";
         if (status === "OFFLINE") st = "OFFLINE";
         else if (status === "ERRO_AUTENTICACAO") st = "ERRO_AUTENTICACAO";
-        else if (r() < 0.06) st = "SEM_VIDEO";
+        else if (status === "NAO_VERIFICADO") st = "NAO_VERIFICADO";
         const lf = st === "TRANSMITINDO" ? now - r() * 60e3 : st === "SEM_VIDEO" ? now - (0.5 + r() * 20) * H : lastOk;
         channels.push({
           id: sid * 100 + n, device_id: sid, number: n, name: CAM_NOMES[(n - 1) % CAM_NOMES.length] + (n > CAM_NOMES.length ? " 2" : ""),
@@ -130,6 +153,11 @@
           status_since: new Date(st === "TRANSMITINDO" ? now - (2 + r() * 10) * 24 * H : lf).toISOString(),
         });
       }
+    });
+
+    LOJAS_SEM_DVR.forEach((name) => {
+      const sid = stores.length + 1;
+      stores.push({ id: sid, name, code: String(sid).padStart(2, "0"), city: "", notes: SIM_NOTA[SIM_NEXT[name]] || "" });
     });
 
     // histórico dos últimos 30 dias

@@ -494,6 +494,7 @@
     const m = openModal(`${modalHead(esc(s.name), [s.code && "Cód. " + s.code, s.city].filter(Boolean).map(esc).join(" · ") || "Loja")}
       <div class="modal-b" style="display:flex;flex-direction:column;gap:16px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${healthBadge(storeHealth(id))}<span class="tag">Disponibilidade DVR 30 d: ${pct(av.devAvail)}</span><span class="tag">Canais 30 d: ${pct(av.chAvail)}</span><span class="tag">${av.incidents} incidentes</span></div>
+        ${s.notes ? `<div class="callout info">${ic("info")}<div>${esc(s.notes)}</div></div>` : ""}
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="editStore" data-id="${id}">${ic("edit")} Editar loja</button><button class="btn sm" data-act="newDevice" data-store="${id}">${ic("plus")} Adicionar DVR</button><button class="btn sm" data-go="#/historico?loja=${id}">${ic("historico")} Histórico</button></div>
         ${dv.map((d) => `<div class="card"><div class="card-h clickable" data-dev="${d.id}"><div><h3>${esc(d.model || "DVR")} · <span class="mono">${esc(d.serial)}</span></h3><div class="sub">${d.host ? esc(d.host) + ":" + d.port : "Sem IP"} · ${esc(connOf(d))} · ${d.last_check ? "verificado " + fmtAgo(d.last_check) : "nunca verificado"}</div></div><span class="spacer"></span>${devBadge(d.status)}</div>
           ${camGrid(idx.chByDev[d.id] || [], d)}</div>`).join("") || '<div class="empty">Nenhum DVR vinculado a esta loja.</div>'}
@@ -1228,7 +1229,7 @@
     } else {
       body = `<div style="max-width:680px;display:flex;flex-direction:column;gap:12px;font-size:13px">
         <dl class="kv"><dt>Versão do painel</dt><dd>2.0.0</dd><dt>Fonte de dados</dt><dd>${c.mode === "demo" ? "Demonstração" : "API · " + esc(c.apiBase || "mesma origem")}</dd><dt>Lojas / DVRs / canais</dt><dd>${S.stores.length} / ${S.devices.length} / ${S.channels.length}</dd></dl>
-        ${c.mode === "demo" ? `<div class="callout warn">${ic("info")}<div>No modo demonstração, as 31 lojas e seriais são reais, mas status, IPs e histórico são simulados. Você pode restaurar os dados de exemplo a qualquer momento.</div></div><div><button class="btn danger" data-act="resetDemo">Restaurar dados de demonstração</button></div>` : ""}</div>`;
+        ${c.mode === "demo" ? `<div class="callout warn">${ic("info")}<div>No modo demonstração, as lojas e seriais são reais e o status segue o retrato do SIM Next de 27/11/2026 (veja as observações de cada loja). IPs e histórico são simulados. Você pode restaurar os dados de exemplo a qualquer momento.</div></div><div><button class="btn danger" data-act="resetDemo">Restaurar dados de demonstração</button></div>` : ""}</div>`;
     }
     const html = `<div class="card"><div class="card-b"><div class="tabs">${tabs.map(([k, l]) => `<button class="${tab === k ? "active" : ""}" data-set="tab" data-val="${k}">${l}</button>`).join("")}</div>${body}</div></div>`;
     return {
